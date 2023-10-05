@@ -51,17 +51,17 @@ OBJECTDIR=build/${CND_CONF}/${IMAGE_TYPE}
 DISTDIR=dist/${CND_CONF}/${IMAGE_TYPE}
 
 # Source Files Quoted if spaced
-SOURCEFILES_QUOTED_IF_SPACED=timer1_main.c
+SOURCEFILES_QUOTED_IF_SPACED=timer1_main.c timer2_main.c
 
 # Object Files Quoted if spaced
-OBJECTFILES_QUOTED_IF_SPACED=${OBJECTDIR}/timer1_main.o
-POSSIBLE_DEPFILES=${OBJECTDIR}/timer1_main.o.d
+OBJECTFILES_QUOTED_IF_SPACED=${OBJECTDIR}/timer1_main.o ${OBJECTDIR}/timer2_main.o
+POSSIBLE_DEPFILES=${OBJECTDIR}/timer1_main.o.d ${OBJECTDIR}/timer2_main.o.d
 
 # Object Files
-OBJECTFILES=${OBJECTDIR}/timer1_main.o
+OBJECTFILES=${OBJECTDIR}/timer1_main.o ${OBJECTDIR}/timer2_main.o
 
 # Source Files
-SOURCEFILES=timer1_main.c
+SOURCEFILES=timer1_main.c timer2_main.c
 
 
 
@@ -95,12 +95,24 @@ ${OBJECTDIR}/timer1_main.o: timer1_main.c  .generated_files/flags/default/76fe18
 	@${RM} ${OBJECTDIR}/timer1_main.o 
 	${MP_CC} $(MP_EXTRA_CC_PRE)  timer1_main.c  -o ${OBJECTDIR}/timer1_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/timer1_main.o.d"      -g -D__DEBUG -D__MPLAB_DEBUGGER_PK3=1    -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
 	
+${OBJECTDIR}/timer2_main.o: timer2_main.c  .generated_files/flags/default/e662603a37ed772432a122400ae3dbc7a167f925 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+	@${MKDIR} "${OBJECTDIR}" 
+	@${RM} ${OBJECTDIR}/timer2_main.o.d 
+	@${RM} ${OBJECTDIR}/timer2_main.o 
+	${MP_CC} $(MP_EXTRA_CC_PRE)  timer2_main.c  -o ${OBJECTDIR}/timer2_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/timer2_main.o.d"      -g -D__DEBUG -D__MPLAB_DEBUGGER_PK3=1    -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
+	
 else
 ${OBJECTDIR}/timer1_main.o: timer1_main.c  .generated_files/flags/default/97c8afda88932569d1127e1f259a8f0427d091d4 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/timer1_main.o.d 
 	@${RM} ${OBJECTDIR}/timer1_main.o 
 	${MP_CC} $(MP_EXTRA_CC_PRE)  timer1_main.c  -o ${OBJECTDIR}/timer1_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/timer1_main.o.d"        -g -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
+	
+${OBJECTDIR}/timer2_main.o: timer2_main.c  .generated_files/flags/default/ba689bfc0f2c941fa611a30454888cc8f6311fbb .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+	@${MKDIR} "${OBJECTDIR}" 
+	@${RM} ${OBJECTDIR}/timer2_main.o.d 
+	@${RM} ${OBJECTDIR}/timer2_main.o 
+	${MP_CC} $(MP_EXTRA_CC_PRE)  timer2_main.c  -o ${OBJECTDIR}/timer2_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/timer2_main.o.d"        -g -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
 	
 endif
 
