@@ -1,12 +1,3 @@
-/*
- * File:   timer1.c
- * Author: veronicagavagna
- *
- * Created on September 26, 2023, 12:59 PM
- */
-
-
-
 // DSPIC30F4011 Configuration Bit Settings
 
 // 'C' source line config statements
@@ -43,69 +34,68 @@
 #include <xc.h>
 
 #define TIMER1 1
+#define TIMER2 2
 #define FOSC 7372800
 
-void tmr_wait_ms(int timer, int ms) {
-    switch(timer) {
-        case TIMER1: {
-            TMR1 = 0; // reset timer counter
+void tmr_setup_period(int timer) {
+        TMR1 = 0; // reset timer counter
+        IFS0bits.T1IF = 0; // reset timer flag
 
-            // FOSC = 7.3728
-            // Fcy = 7.3728 MHz / 4 = 1843200
-            // Fcy * ms / 1000 = 184320 (over 65535, prescaler 1:8)
-            // 184320 / 8 = 23040 clock steps
+        // FOSC = 7.3728
+        // Fcy = 7.3728 MHz / 4 = 1843200
+        // Fcy * ms / 1000 = 184320 (over 65535, prescaler 1:8)
+        // 184320 / 8 = 23040 clock steps
 
-            long fcy = (FOSC / 4) * (ms / 1000.0);
+        T1CONbits.TON = 1; //starts the timer
+}
 
-            long fcy_new = 0.0;
+void tmr_wait_period(int timer, int ms) {
+    long fcy = (FOSC / 4) * (ms / 1000.0);
 
-            if (fcy > 65535) {
-                fcy_new = fcy / 8;
-                T1CONbits.TCKPS = 1; // prescaler 1:8
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 64;
-                T1CONbits.TCKPS = 2; // prescaler 1:64
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 256;
-                T1CONbits.TCKPS = 3; // prescaler 1:256
-            }
+    long fcy_new = 0.0;
 
-            PR1 = fcy_new;
-
-            T1CONbits.TON = 1; //starts the timer
-            
-            if (IFS0bits.T1IF && TMR1 == 0) {
-                LATBbits.LATB0 = 1;
-                while(1);
-            }
-            
-            while(!IFS0bits.T1IF);
-            IFS0bits.T1IF = 0;
-        }
-        break;
+    if (fcy > 65535) {
+        fcy_new = fcy / 8;
+        T1CONbits.TCKPS = 1; // prescaler 1:8
     }
-    
-};
+    if (fcy_new > 65535) {
+        fcy_new = fcy / 64;
+        T1CONbits.TCKPS = 2; // prescaler 1:64
+    }
+    if (fcy_new > 65535) {
+        fcy_new = fcy / 256;
+        T1CONbits.TCKPS = 3; // prescaler 1:256
+    }
 
+    PR1 = fcy_new;
     
+    if (IFS0bits.T1IF) {
+        LATBbits.LATB1 = 1;
+    }
+
+    while(!IFS0bits.T1IF);
+    IFS0bits.T1IF = 0;
+    
+    LATBbits.LATB1 = 0;
+}
+
 int main(void) {
-    
     TRISBbits.TRISB0 = 0; // set the pin of the led as output
+    TRISBbits.TRISB1 = 0;
+    LATBbits.LATB1 = 1;
     
-    // ES3
+    tmr_setup_period(TIMER1);
+    
     LATBbits.LATB0 = 1;
-    tmr_wait_ms(TIMER1, 1000);
+    tmr_wait_period(TIMER1, 1000);
     
     LATBbits.LATB0 = 0;
-    tmr_wait_ms(TIMER1, 10000);
+    tmr_wait_period(TIMER1, 5000);
     
     LATBbits.LATB0 = 1;
-    tmr_wait_ms(TIMER1, 500);
+    tmr_wait_period(TIMER1, 500);
     
     LATBbits.LATB0 = 0; 
-    tmr_wait_ms(TIMER1, 5000);
-    
+
     return 0;
 }
