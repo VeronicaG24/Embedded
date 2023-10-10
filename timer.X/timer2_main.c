@@ -34,7 +34,6 @@
 #include <xc.h>
 
 #define TIMER1 1
-#define TIMER2 2
 #define FOSC 7372800
 
 void tmr_setup_period(int timer) {
@@ -49,7 +48,7 @@ void tmr_setup_period(int timer) {
         T1CONbits.TON = 1; //starts the timer
 }
 
-void tmr_wait_period(int timer, int ms) {
+void tmr_wait_ms(int timer, int ms) {
     long fcy = (FOSC / 4) * (ms / 1000.0);
 
     long fcy_new = 0.0;
@@ -82,18 +81,17 @@ void tmr_wait_period(int timer, int ms) {
 int main(void) {
     TRISBbits.TRISB0 = 0; // set the pin of the led as output
     TRISBbits.TRISB1 = 0;
-    LATBbits.LATB1 = 1;
     
     tmr_setup_period(TIMER1);
     
     LATBbits.LATB0 = 1;
-    tmr_wait_period(TIMER1, 1000);
+    tmr_wait_ms(TIMER1, 1000);
     
     LATBbits.LATB0 = 0;
-    tmr_wait_period(TIMER1, 5000);
+    tmr_wait_ms(TIMER1, 5000);
     
     LATBbits.LATB0 = 1;
-    tmr_wait_period(TIMER1, 500);
+    tmr_wait_ms(TIMER1, 500);
     
     LATBbits.LATB0 = 0; 
 
