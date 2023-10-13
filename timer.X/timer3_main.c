@@ -1,4 +1,3 @@
-/*
 // DSPIC30F4011 Configuration Bit Settings
 
 // 'C' source line config statements
@@ -38,93 +37,105 @@
 #define TIMER2 2
 #define FOSC 7372800
 
-void tmr_setup_period(int timer, int ms) {
-    switch(timer) {
+void tmr_setup_period(int timer) {
+    switch (timer) {
         case TIMER1: {
             TMR1 = 0; // reset T1 counter
-
-            long fcy = (FOSC / 4) * (ms / 1000.0);
-            long fcy_new = 0.0;
-
-            if (fcy > 65535) {
-                fcy_new = fcy / 8;
-                T1CONbits.TCKPS = 1; // prescaler 1:8
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 64;
-                T1CONbits.TCKPS = 2; // prescaler 1:64
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 256;
-                T1CONbits.TCKPS = 3; // prescaler 1:256
-            }
-
-            PR1 = fcy_new;
-
+            IFS0bits.T1IF = 0; // reset T1 flag
             T1CONbits.TON = 1; // start T1
         }
         break;
         
         case TIMER2: {
             TMR2 = 0; // reset T2 counter
-
-            long fcy = (FOSC / 4) * (ms / 1000.0);
-            long fcy_new = 0.0;
-
-            if (fcy > 65535) {
-                fcy_new = fcy / 8;
-                T2CONbits.TCKPS = 1; // prescaler 1:8
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 64;
-                T2CONbits.TCKPS = 2; // prescaler 1:64
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 256;
-                T2CONbits.TCKPS = 3; // prescaler 1:256
-            }
-
-            PR2 = fcy_new;
-
+            IFS0bits.T2IF = 0; // reset T2 flag
             T2CONbits.TON = 1; // start T2
         }
         break;
     }
 }
 
-void tmr_wait_period(int timer) {
-    switch(timer) {
+void tmr_wait_ms(int timer, int ms) {
+    int prescaler = 1;
+    long fcy = (FOSC / 4) * (ms / 1000.0);
+    long fcy_new = 0.0;
+
+    if (fcy > 65535) {
+        fcy_new = fcy / 8;
+        prescaler = 1; // prescaler 1:8
+    }
+    if (fcy_new > 65535) {
+        fcy_new = fcy / 64;
+        prescaler = 2; // prescaler 1:64
+    }
+    if (fcy_new > 65535) {
+        fcy_new = fcy / 256;
+        prescaler = 3; // prescaler 1:256
+    }
+
+    switch (timer) {
         case TIMER1: {
+            T1CONbits.TCKPS = prescaler;
+            PR1 = fcy_new;
+
+            // turn on led B1 if missed a deadline
+            if (IFS0bits.T1IF)
+                LATBbits.LATB1 = 1;
+
+            // wait...
             while(!IFS0bits.T1IF);
             IFS0bits.T1IF = 0;
         }
+        break;
+
         case TIMER2: {
+            T2CONbits.TCKPS = prescaler;
+            PR2 = fcy_new;
+
+            // turn on led B1 if missed a deadline
+            if (IFS0bits.T2IF)
+                LATBbits.LATB1 = 1;
+
+            // wait...
             while(!IFS0bits.T2IF);
             IFS0bits.T2IF = 0;
         }
+        break;
     }
-}
 
-void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
-    IFS0bits.T2IF = 0; // reset interrupt flag
-
-    LATBbits.LATB1 = !LATBbits.LATB1;
+    // turn of led B1
+    LATBbits.LATB1 = 0;
 }
 
 int main(void) {
     TRISBbits.TRISB0 = 0; // led B0 as output
-    TRISBbits.TRISB1 = 0; // led B1 as output
+    TRISEbits.TRISE8 = 1; // btn S5 as input
 
-    IEC0bits.T2IE = 1; // enable T2 interrupt
+    int btnValue = 0; // btn S5 value
+    int period = 1000; // ms
+    int pulse = 100; // ms
+    int mult = 0; // multiplier: 1, 2, 3
 
-    tmr_setup_period(TIMER1, 500);
-    tmr_setup_period(TIMER2, 250);
+    // setup and start timer
+    tmr_setup_period(TIMER1);
+    
+    LATBbits.LATB0 = 0; // initially led off
 
-    while(1) {
-        LATBbits.LATB0 = !LATBbits.LATB0;
-        tmr_wait_period(TIMER1);
+    while (1) {
+        btnValue = PORTEbits.RE8;
+        
+        if (!btnValue) mult++;
+        
+        if (mult > 0) {
+            if (mult > 3) mult = 1;
+
+            LATBbits.LATB0 = 1;
+            tmr_wait_ms(TIMER1, mult * pulse);
+            
+            LATBbits.LATB0 = 0;
+            tmr_wait_ms(TIMER1, period - mult*pulse);
+        }
     }
 
     return 0;
 }
-*/

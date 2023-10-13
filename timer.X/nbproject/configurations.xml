@@ -14,6 +14,7 @@
                    projectFiles="true">
       <itemPath>timer1_main.c</itemPath>
       <itemPath>timer2_main.c</itemPath>
+      <itemPath>timer3_main.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"

@@ -40,10 +40,9 @@
 void tmr_setup_period(int timer, int ms) {
     switch(timer) {
         case TIMER1: {
-            TMR1 = 0; // reset timer counter
+            TMR1 = 0; // reset T1 counter
 
             long fcy = (FOSC / 4) * (ms / 1000.0);
-
             long fcy_new = 0.0;
 
             if (fcy > 65535) {
@@ -61,15 +60,14 @@ void tmr_setup_period(int timer, int ms) {
 
             PR1 = fcy_new;
 
-            T1CONbits.TON = 1; //starts the timer
+            T1CONbits.TON = 1; // start T1
         }
         break;
         
         case TIMER2: {
-            TMR2 = 0; // reset timer counter
+            TMR2 = 0; // reset T2 counter
 
             long fcy = (FOSC / 4) * (ms / 1000.0);
-
             long fcy_new = 0.0;
 
             if (fcy > 65535) {
@@ -87,7 +85,7 @@ void tmr_setup_period(int timer, int ms) {
 
             PR2 = fcy_new;
 
-            T2CONbits.TON = 1; // starts the timer
+            T2CONbits.TON = 1; // start T2
         }
         break;
     }
@@ -119,11 +117,11 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     // when timer elapsed read if the btn is still pressed, if not toggle
     int pinValue = 0;
     pinValue = !PORTEbits.RE8;
-    
+
     if (!pinValue)
-        T2CONbits.TON = 0; // stop timer
+        T2CONbits.TON = 0; // stop T2
     else {
-        // stop timer and toggle
+        // stop T2 and toggle led B1 state
         T2CONbits.TON = 0;
         LATBbits.LATB1 = !LATBbits.LATB1;
     }
@@ -137,6 +135,7 @@ int main(void) {
     IEC0bits.INT0IE = 1; // enable INT0 interrupt
     IEC0bits.T2IE = 1; // enable INT0 interrupt
 
+    // setup and start timer T1
     tmr_setup_period(TIMER1, 500);
 
     while(1) {

@@ -1,12 +1,4 @@
 /*
- * File:   timer1.c
- * Author: veronicagavagna
- *
- * Created on September 26, 2023, 12:59 PM
- */
-
-
-/*
 // DSPIC30F4011 Configuration Bit Settings
 
 // 'C' source line config statements
@@ -47,17 +39,17 @@
 #define FOSC 7372800
 
 void tmr_setup_period(int timer, int ms) {
+    // FOSC = 7.3728 MHz
+    // fcy = FOSC / 4 = 7.3728 / 4 = 1843200 Hz
+    // fcy * ms / 1000 = 184320 (over 65535 --> prescaler 1:8)
+    // PRX = 184320 / 8 = 23040 clock steps
+    // if PRX still > 65535, then apply prescaler 1:64, eventually 1:256
+
     switch(timer) {
         case TIMER1: {
-            TMR1 = 0; // reset timer counter
-
-            // FOSC = 7.3728
-            // Fcy = 7.3728 MHz / 4 = 1843200
-            // Fcy * ms / 1000 = 184320 (over 65535, prescaler 1:8)
-            // 184320 / 8 = 23040 clock steps
+            TMR1 = 0; // reset T1 counter
 
             long fcy = (FOSC / 4) * (ms / 1000.0);
-
             long fcy_new = 0.0;
 
             if (fcy > 65535) {
@@ -73,22 +65,16 @@ void tmr_setup_period(int timer, int ms) {
                 T1CONbits.TCKPS = 3; // prescaler 1:256
             }
 
-
             PR1 = fcy_new;
 
-            T1CONbits.TON = 1; //starts the timer
+            T1CONbits.TON = 1; // start T1
         }
         break;
-        case TIMER2: {
-            TMR2 = 0; // reset timer counter
 
-            // FOSC = 7.3728
-            // Fcy = 7.3728 MHz / 4 = 1843200
-            // Fcy * ms / 1000 = 184320 (over 65535, prescaler 1:8)
-            // 184320 / 8 = 23040 clock steps
+        case TIMER2: {
+            TMR2 = 0; // reset T2 counter
 
             long fcy = (FOSC / 4) * (ms / 1000.0);
-
             long fcy_new = 0.0;
 
             if (fcy > 65535) {
@@ -104,16 +90,13 @@ void tmr_setup_period(int timer, int ms) {
                 T2CONbits.TCKPS = 3; // prescaler 1:256
             }
 
-
             PR2 = fcy_new;
 
-            T2CONbits.TON = 1; //starts the timer
+            T2CONbits.TON = 1; // start T2
         }
         break;
     }
-    
-};
-
+}
 
 void tmr_wait_period(int timer) {
     switch(timer) {
@@ -126,25 +109,20 @@ void tmr_wait_period(int timer) {
             IFS0bits.T2IF = 0;
         }
     }
-};
+}
 
-
- 
 int main(void) {
-    
-    int state = 0;
-    TRISBbits.TRISB0 = 0; // set the pin of the led as output
-    
-    // ES1 + 2
+    TRISBbits.TRISB0 = 0; // led B0 as output
+
+    // setup and start timer
     tmr_setup_period(TIMER1, 500);
-    
+
     while(1) {
-        state = !state;
-        LATBbits.LATB0 = state; // set the status of the led
+        LATBbits.LATB0 = !LATBbits.LATB0; // toggle led status
+        // wait...
         tmr_wait_period(TIMER1);
     }
 
-    
     return 0;
 }
 */
