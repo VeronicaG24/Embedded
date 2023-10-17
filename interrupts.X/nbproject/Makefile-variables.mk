@@ -6,5 +6,5 @@
 CND_BASEDIR=`pwd`
 # default configuration
 CND_ARTIFACT_DIR_default=dist/default/production
-CND_ARTIFACT_NAME_default=embeddedLED.production.hex
-CND_ARTIFACT_PATH_default=dist/default/production/embeddedLED.production.hex
+CND_ARTIFACT_NAME_default=interrupts.X.production.hex
+CND_ARTIFACT_PATH_default=dist/default/production/interrupts.X.production.hex

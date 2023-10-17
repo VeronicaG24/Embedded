@@ -24,7 +24,7 @@ CLEAN_SUBPROJECTS=${CLEAN_SUBPROJECTS_${SUBPROJECTS}}
 
 
 # Project Name
-PROJECTNAME=embeddedLED
+PROJECTNAME=interrupts.X
 
 # Active Configuration
 DEFAULTCONF=default
