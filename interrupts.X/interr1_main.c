@@ -44,7 +44,7 @@ void tmr_setup_period(int timer, int ms) {
             TMR1 = 0; // reset T1 counter
 
             long fcy = (FOSC / 4) * (ms / 1000.0);
-            long fcy_new = 0.0;
+            long fcy_new = fcy;
 
             if (fcy > 65535) {
                 fcy_new = fcy / 8;
@@ -69,7 +69,7 @@ void tmr_setup_period(int timer, int ms) {
             TMR2 = 0; // reset T2 counter
 
             long fcy = (FOSC / 4) * (ms / 1000.0);
-            long fcy_new = 0.0;
+            long fcy_new = fcy;
 
             if (fcy > 65535) {
                 fcy_new = fcy / 8;

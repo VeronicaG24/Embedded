@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <project>
-  <executable name="dist/default/production/interrupts.X.production.elf">
+  <executable name="dist/default/production/embeddedLED.production.elf">
     <memory name="data">
       <units>bytes</units>
       <length>2048</length>
@@ -11,8 +11,8 @@
     <memory name="program">
       <units>bytes</units>
       <length>48768</length>
-      <used>3603</used>
-      <free>45165</free>
+      <used>3606</used>
+      <free>45162</free>
     </memory>
   </executable>
 </project>

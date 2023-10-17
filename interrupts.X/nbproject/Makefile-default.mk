@@ -89,26 +89,42 @@ MP_LINKER_FILE_OPTION=,--script=p30F4011.gld
 # ------------------------------------------------------------------------------------
 # Rules for buildStep: compile
 ifeq ($(TYPE_IMAGE), DEBUG_RUN)
+<<<<<<< Updated upstream:nbproject/Makefile-default.mk
 ${OBJECTDIR}/interr1_main.o: interr1_main.c  .generated_files/flags/default/9df70acad70c7cf079398a6a41fe0e4266e67552 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+=======
+${OBJECTDIR}/interr1_main.o: interr1_main.c  .generated_files/flags/default/a0bcd945ff9ab04e98e523d82e954175ec5a4df2 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+>>>>>>> Stashed changes:interrupts.X/nbproject/Makefile-default.mk
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/interr1_main.o.d 
 	@${RM} ${OBJECTDIR}/interr1_main.o 
 	${MP_CC} $(MP_EXTRA_CC_PRE)  interr1_main.c  -o ${OBJECTDIR}/interr1_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/interr1_main.o.d"      -g -D__DEBUG -D__MPLAB_DEBUGGER_PK3=1    -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
 	
+<<<<<<< Updated upstream:nbproject/Makefile-default.mk
 ${OBJECTDIR}/interr2_main.o: interr2_main.c  .generated_files/flags/default/2045a8aefd570009b3933ad0321f012cd3e476a2 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+=======
+${OBJECTDIR}/interr2_main.o: interr2_main.c  .generated_files/flags/default/a308d60bcf92917ed8138652493d289f961fe357 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+>>>>>>> Stashed changes:interrupts.X/nbproject/Makefile-default.mk
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/interr2_main.o.d 
 	@${RM} ${OBJECTDIR}/interr2_main.o 
 	${MP_CC} $(MP_EXTRA_CC_PRE)  interr2_main.c  -o ${OBJECTDIR}/interr2_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/interr2_main.o.d"      -g -D__DEBUG -D__MPLAB_DEBUGGER_PK3=1    -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
 	
 else
+<<<<<<< Updated upstream:nbproject/Makefile-default.mk
 ${OBJECTDIR}/interr1_main.o: interr1_main.c  .generated_files/flags/default/9b23e584b12c1ecc5f8cc799b315363b761cae8b .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+=======
+${OBJECTDIR}/interr1_main.o: interr1_main.c  .generated_files/flags/default/dfee3946d86fd835812163b0e893b6cf0f54087a .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+>>>>>>> Stashed changes:interrupts.X/nbproject/Makefile-default.mk
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/interr1_main.o.d 
 	@${RM} ${OBJECTDIR}/interr1_main.o 
 	${MP_CC} $(MP_EXTRA_CC_PRE)  interr1_main.c  -o ${OBJECTDIR}/interr1_main.o  -c -mcpu=$(MP_PROCESSOR_OPTION)  -MP -MMD -MF "${OBJECTDIR}/interr1_main.o.d"        -g -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -O0 -msmart-io=1 -Wall -msfr-warn=off    -mdfp="${DFP_DIR}/xc16"
 	
+<<<<<<< Updated upstream:nbproject/Makefile-default.mk
 ${OBJECTDIR}/interr2_main.o: interr2_main.c  .generated_files/flags/default/13895ad7bd7289c6bcc0d2fc70be76339c447b53 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+=======
+${OBJECTDIR}/interr2_main.o: interr2_main.c  .generated_files/flags/default/e926af0a838d5b1605dd2ab7eebfe075b44ecdf2 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+>>>>>>> Stashed changes:interrupts.X/nbproject/Makefile-default.mk
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/interr2_main.o.d 
 	@${RM} ${OBJECTDIR}/interr2_main.o 
@@ -138,8 +154,13 @@ ${DISTDIR}/embeddedLED.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbproject
 else
 ${DISTDIR}/embeddedLED.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbproject/Makefile-${CND_CONF}.mk   
 	@${MKDIR} ${DISTDIR} 
+<<<<<<< Updated upstream:nbproject/Makefile-default.mk
 	${MP_CC} $(MP_EXTRA_LD_PRE)  -o ${DISTDIR}/embeddedLED.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX}  ${OBJECTFILES_QUOTED_IF_SPACED}      -mcpu=$(MP_PROCESSOR_OPTION)        -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -Wl,,,--defsym=__MPLAB_BUILD=1,$(MP_LINKER_FILE_OPTION),--stack=16,--check-sections,--data-init,--pack-data,--handles,--isr,--no-gc-sections,--fill-upper=0,--stackguard=16,--no-force-link,--smart-io,-Map="${DISTDIR}/${PROJECTNAME}.${IMAGE_TYPE}.map",--report-mem,--memorysummary,${DISTDIR}/memoryfile.xml$(MP_EXTRA_LD_POST)  -mdfp="${DFP_DIR}/xc16" 
 	${MP_CC_DIR}\\xc16-bin2hex ${DISTDIR}/embeddedLED.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX} -a  -omf=elf   -mdfp="${DFP_DIR}/xc16" 
+=======
+	${MP_CC} $(MP_EXTRA_LD_PRE)  -o ${DISTDIR}/interrupts.X.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX}  ${OBJECTFILES_QUOTED_IF_SPACED}      -mcpu=$(MP_PROCESSOR_OPTION)        -omf=elf -DXPRJ_default=$(CND_CONF)    $(COMPARISON_BUILD)  -Wl,,,--defsym=__MPLAB_BUILD=1,$(MP_LINKER_FILE_OPTION),--stack=16,--check-sections,--data-init,--pack-data,--handles,--isr,--no-gc-sections,--fill-upper=0,--stackguard=16,--no-force-link,--smart-io,-Map="${DISTDIR}/${PROJECTNAME}.${IMAGE_TYPE}.map",--report-mem,--memorysummary,${DISTDIR}/memoryfile.xml$(MP_EXTRA_LD_POST)  -mdfp="${DFP_DIR}/xc16" 
+	${MP_CC_DIR}\\xc16-bin2hex ${DISTDIR}/interrupts.X.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX} -a  -omf=elf   -mdfp="${DFP_DIR}/xc16" 
+>>>>>>> Stashed changes:interrupts.X/nbproject/Makefile-default.mk
 	
 endif
 
