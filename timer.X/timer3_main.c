@@ -58,7 +58,7 @@ void tmr_setup_period(int timer) {
 void tmr_wait_ms(int timer, int ms) {
     int prescaler = 1;
     long fcy = (FOSC / 4) * (ms / 1000.0);
-    long fcy_new = 0.0;
+    long fcy_new = fcy;
 
     if (fcy > 65535) {
         fcy_new = fcy / 8;
@@ -128,12 +128,16 @@ int main(void) {
         
         if (mult > 0) {
             if (mult > 3) mult = 1;
-
-            LATBbits.LATB0 = 1;
-            tmr_wait_ms(TIMER1, mult * pulse);
             
-            LATBbits.LATB0 = 0;
-            tmr_wait_ms(TIMER1, period - mult*pulse);
+            for (int i=0; i<mult; i++) {
+                LATBbits.LATB0 = 1;
+                tmr_wait_ms(TIMER1, pulse);
+                
+                LATBbits.LATB0 = 0;
+                tmr_wait_ms(TIMER1, pulse);
+            }
+            
+            tmr_wait_ms(TIMER1, period - 2*mult*pulse);
         }
     }
 
