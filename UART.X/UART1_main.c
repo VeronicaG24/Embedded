@@ -32,12 +32,18 @@
 // Use project enums instead of #define for ON and OFF.
 
 #include <xc.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 7372800
 #define BAUND 9600
+#define FIRST_ROW 0x80
+#define SECOND_ROW 0xC0
+
+char receivedChar;
+int charCount = 0;
 
 void tmr_setup_period(int timer) {
     switch (timer) {
@@ -98,31 +104,96 @@ void tmr_wait_ms(int timer, int ms) {
     }
 }
 
-int main(void) {    
-    // LCD setup
-    /*SPI1CONbits.MSTEN = 1; // master mode
+// Function to initialize SPI1 for LCD
+void SPI1_Init() {
+    SPI1CONbits.MSTEN = 1; // master mode
     SPI1CONbits.MODE16 = 0; // 8-bit mode --> 1MHz
     SPI1CONbits.PPRE = 3; // 1:1 primary prescaler
     SPI1CONbits.SPRE = 3; // 5:1 secondary prescaler
     SPI1STATbits.SPIEN = 1; // enable SPI
-    */
-    // UART setup
-    U2BRG = (FOSC / 4) / (16 * BAUND) - 1; // = 11
-    U2MODEbits.UARTEN = 1; // enable UART2
-    U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
-    U2TXREG = 'C';
-/*   
+
     // Wait for LCD to go up
     tmr_setup_period(TIMER1);
     tmr_wait_ms(TIMER1, 1000);
-    
-    char str[100];
-    sprintf(str, "%d", );
+}
 
-    while(str[i] != '\0') {
-        while(SPI1STATbits.SPITBF == 1); // wait until not full
-        SPI1BUF = str[i];
-    }*/
+// Function to initialize UART2
+void UART2_Init() {
+    U2BRG = ((FOSC / 4) / (16L * BAUND)) - 1; // = 11
+    U2MODEbits.UARTEN = 1; // enable UART2
+    U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
+}
+
+// Function to send data to the LCD via SPI1
+void LCD_SendData(char data) {
+    while(SPI1STATbits.SPITBF == 1); // wait until not full
+    SPI1BUF = data;
+    charCount++;
+}
+
+// Function to clear the first row of the LCD
+void LCD_ClearFirstRow() {
+    LCD_SendData(FIRST_ROW);
+    for (int i = 0; i < charCount; i++)
+        LCD_SendData(' ');
+
+    LCD_SendData(FIRST_ROW);
+    
+    charCount = 0;
+}
+
+// Function to update the second row of the LCD with the character count
+void UpdateSecondRow() {
+    LCD_SendData(SECOND_ROW);
+    
+    char buff[16];    
+    int i = 0;
+    sprintf(buff, "Char Recv: %d", charCount);
+
+    while(buff[i] != '\0') {
+        LCD_SendData(buff[i]);
+        i++;
+    }
+}
+
+char UART2_ReadChar() {
+    while (!U2STAbits.URXDA); // Wait until data is received
+    return U2RXREG; // Return the received data
+}
+
+int main(void) {
+    // Init UART2 and SPI1
+    UART2_Init();
+    SPI1_Init();
+    
+    // Init buttons S5 and S6 as inputs
+    TRISEbits.TRISE8 = 1; // S5
+    TRISEbits.TRISE5 = 1; // S6
+
+    while (1) {
+        // Check for received characters from UART2
+        if (U2STAbits.URXDA) {
+            receivedChar = U2RXREG;
+            
+            LCD_SendData(FIRST_ROW);
+
+            // Check for CR and LF characters and handle accordingly
+            if (receivedChar == '\r' || receivedChar == '\n')
+                LCD_ClearFirstRow();
+            else {
+                // Display the received character on the first row of the LCD
+                LCD_SendData(receivedChar);
+
+                if (charCount > 16)
+                    LCD_ClearFirstRow();
+            }
+
+            // Update the second row with the character count
+            UpdateSecondRow();
+        }
+
+        // Check for button S5 and S6 presses and handle as described
+    }
 
     return 0;
 }
