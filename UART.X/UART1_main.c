@@ -39,8 +39,11 @@
 #define TIMER2 2
 #define FOSC 7372800
 #define BAUND 9600
+#define BUFF_SIZE 16
 #define FIRST_ROW 0x80
 #define SECOND_ROW 0xC0
+
+// NOTE: CharCounter da modificare, non va usato per vedere se si arriva in fondo alla prima riga
 
 char receivedChar;
 int charCount = 0;
@@ -104,6 +107,21 @@ void tmr_wait_ms(int timer, int ms) {
     }
 }
 
+void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
+    IFS0bits.INT0IF = 0; // reset interrupt flag
+
+    if (1) {
+        // Send the current number of characters received via UART2
+        char buff[BUFF_SIZE];
+        sprintf(buff, "%d", charCount); // Convert charCount to a string
+        // Send the buffer via UART2
+        for (int i = 0; i < strlen(buff); i++) {
+            while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
+            U2TXREG = buff[i];
+        }
+    }
+}
+
 // Function to initialize SPI1 for LCD
 void SPI1_Init() {
     SPI1CONbits.MSTEN = 1; // master mode
@@ -134,6 +152,7 @@ void LCD_SendData(char data) {
 // Function to clear the first row of the LCD
 void LCD_ClearFirstRow() {
     LCD_SendData(FIRST_ROW);
+
     for (int i = 0; i < charCount; i++)
         LCD_SendData(' ');
 
@@ -146,10 +165,16 @@ void LCD_ClearFirstRow() {
 void UpdateSecondRow() {
     LCD_SendData(SECOND_ROW);
     
-    char buff[16];    
+    char buff[16];
     int i = 0;
-    sprintf(buff, "Char Recv: %d", charCount);
-
+    
+    sprintf(buff, "Char Recv: ");
+    while(buff[i] != '\0') {
+        LCD_SendData(buff[i]);
+        i++;
+    }
+    
+    sprintf(buff, "%d", charCount);
     while(buff[i] != '\0') {
         LCD_SendData(buff[i]);
         i++;
@@ -170,11 +195,13 @@ int main(void) {
     TRISEbits.TRISE8 = 1; // S5
     TRISEbits.TRISE5 = 1; // S6
 
+    IEC0bits.INT0IE = 1; // enable INT0 interrupt
+
     while (1) {
         // Check for received characters from UART2
         if (U2STAbits.URXDA) {
             receivedChar = U2RXREG;
-            
+
             LCD_SendData(FIRST_ROW);
 
             // Check for CR and LF characters and handle accordingly
@@ -187,12 +214,12 @@ int main(void) {
                 if (charCount > 16)
                     LCD_ClearFirstRow();
             }
+            
+            tmr_wait_ms(TIMER1, 50);
 
             // Update the second row with the character count
             UpdateSecondRow();
         }
-
-        // Check for button S5 and S6 presses and handle as described
     }
 
     return 0;
