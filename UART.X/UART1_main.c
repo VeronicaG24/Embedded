@@ -34,6 +34,7 @@
 #include <xc.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #define TIMER1 1
 #define TIMER2 2
@@ -42,11 +43,12 @@
 #define BUFF_SIZE 16
 #define FIRST_ROW 0x80
 #define SECOND_ROW 0xC0
-
-// NOTE: CharCounter da modificare, non va usato per vedere se si arriva in fondo alla prima riga
+#define CR '\r'
+#define LF '\n'
 
 char receivedChar;
 int charCount = 0;
+int rowCount = 0;
 
 void tmr_setup_period(int timer) {
     switch (timer) {
@@ -110,7 +112,23 @@ void tmr_wait_ms(int timer, int ms) {
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
     IFS0bits.INT0IF = 0; // reset interrupt flag
 
-    if (1) {
+    // start timer form 20ms
+    tmr_wait_ms(TIMER2, 20);
+}
+
+void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
+    IFS0bits.T2IF = 0; // reset interrupt flag
+
+    // when timer elapsed read if the btn is still pressed, if not toggle
+    int pinValue = 0;
+    pinValue = PORTEbits.RE8;
+
+    if (!pinValue)
+        T2CONbits.TON = 0; // stop T2
+    else {
+        // stop T2
+        T2CONbits.TON = 0;
+
         // Send the current number of characters received via UART2
         char buff[BUFF_SIZE];
         sprintf(buff, "%d", charCount); // Convert charCount to a string
@@ -131,7 +149,6 @@ void SPI1_Init() {
     SPI1STATbits.SPIEN = 1; // enable SPI
 
     // Wait for LCD to go up
-    tmr_setup_period(TIMER1);
     tmr_wait_ms(TIMER1, 1000);
 }
 
@@ -146,19 +163,19 @@ void UART2_Init() {
 void LCD_SendData(char data) {
     while(SPI1STATbits.SPITBF == 1); // wait until not full
     SPI1BUF = data;
-    charCount++;
+    tmr_wait_ms(TIMER1, 1); // TO FIX
 }
 
 // Function to clear the first row of the LCD
 void LCD_ClearFirstRow() {
     LCD_SendData(FIRST_ROW);
 
-    for (int i = 0; i < charCount; i++)
+    for (int i = 0; i < rowCount; i++)
         LCD_SendData(' ');
 
     LCD_SendData(FIRST_ROW);
-    
-    charCount = 0;
+
+    rowCount = 0;
 }
 
 // Function to update the second row of the LCD with the character count
@@ -167,14 +184,8 @@ void UpdateSecondRow() {
     
     char buff[16];
     int i = 0;
-    
-    sprintf(buff, "Char Recv: ");
-    while(buff[i] != '\0') {
-        LCD_SendData(buff[i]);
-        i++;
-    }
-    
-    sprintf(buff, "%d", charCount);
+
+    sprintf(buff, "Char Recv: %d", charCount);
     while(buff[i] != '\0') {
         LCD_SendData(buff[i]);
         i++;
@@ -186,40 +197,48 @@ char UART2_ReadChar() {
     return U2RXREG; // Return the received data
 }
 
+void algorithm() {
+    tmr_wait_ms(TIMER2, 7);
+}
+
 int main(void) {
+    // Init timers
+    tmr_setup_period(TIMER1);
+    tmr_setup_period(TIMER2);
+
     // Init UART2 and SPI1
     UART2_Init();
     SPI1_Init();
-    
+
     // Init buttons S5 and S6 as inputs
     TRISEbits.TRISE8 = 1; // S5
     TRISEbits.TRISE5 = 1; // S6
 
     IEC0bits.INT0IE = 1; // enable INT0 interrupt
+    IEC0bits.T2IE = 1; // enable T2 interrupt
 
     while (1) {
+        algorithm();
+
         // Check for received characters from UART2
         if (U2STAbits.URXDA) {
             receivedChar = U2RXREG;
 
-            LCD_SendData(FIRST_ROW);
-
             // Check for CR and LF characters and handle accordingly
-            if (receivedChar == '\r' || receivedChar == '\n')
+            if (receivedChar == CR || receivedChar == LF || rowCount == 16)
                 LCD_ClearFirstRow();
             else {
+                LCD_SendData(FIRST_ROW + rowCount);
                 // Display the received character on the first row of the LCD
                 LCD_SendData(receivedChar);
-
-                if (charCount > 16)
-                    LCD_ClearFirstRow();
+                rowCount++;
+                charCount++;
+                // Update the second row with the character count
+                UpdateSecondRow();
             }
-            
-            tmr_wait_ms(TIMER1, 50);
-
-            // Update the second row with the character count
-            UpdateSecondRow();
         }
+
+        tmr_wait_ms(TIMER1, 10);
     }
 
     return 0;
