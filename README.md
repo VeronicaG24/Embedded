@@ -12,8 +12,8 @@ The assignment is the `UART.X` *MPLAB* project directory.
 - [x] When the end of the row has been reached, clear the first row, and start writing again from the first row first column.
 - [x] Whenever a CR `\r` or LF `\n` character is received, clear the first row 
 - [x] On the second row, write "Char Recv: XXX", where XXX is the number of characters received from the UART2. Use `sprintf(buffer, "%d", value)` to convert an integer to a string to be displayed 
-- [ ] Whenever button `S5` is pressed, send the current number of chars received to `UART2` 
-- [ ] Whenever button `S6` is pressed, clear the first row, and reset the characters received counter
+- [x] Whenever button `S5` is pressed, send the current number of chars received to `UART2` 
+- [x] Whenever button `S6` is pressed, clear the first row, and reset the characters received counter
 
 ### Notes
 

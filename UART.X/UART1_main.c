@@ -49,6 +49,7 @@
 char receivedChar;
 int charCount = 0;
 int rowCount = 0;
+int btn_press = 0; // 0: S5, 1: S6
 
 void tmr_setup_period(int timer) {
     switch (timer) {
@@ -62,6 +63,60 @@ void tmr_setup_period(int timer) {
         case TIMER2: {
             TMR2 = 0; // reset T2 counter
             IFS0bits.T2IF = 0; // reset T2 flag
+            T2CONbits.TON = 1; // start T2
+        }
+        break;
+    }
+}
+
+void tmr_setup_period_2(int timer, int ms) {
+    switch(timer) {
+        case TIMER1: {
+            TMR1 = 0; // reset T1 counter
+
+            long fcy = (FOSC / 4) * (ms / 1000.0);
+            long fcy_new = fcy;
+
+            if (fcy > 65535) {
+                fcy_new = fcy / 8;
+                T1CONbits.TCKPS = 1; // prescaler 1:8
+            }
+            if (fcy_new > 65535) {
+                fcy_new = fcy / 64;
+                T1CONbits.TCKPS = 2; // prescaler 1:64
+            }
+            if (fcy_new > 65535) {
+                fcy_new = fcy / 256;
+                T1CONbits.TCKPS = 3; // prescaler 1:256
+            }
+
+            PR1 = fcy_new;
+
+            T1CONbits.TON = 1; // start T1
+        }
+        break;
+        
+        case TIMER2: {
+            TMR2 = 0; // reset T2 counter
+
+            long fcy = (FOSC / 4) * (ms / 1000.0);
+            long fcy_new = fcy;
+
+            if (fcy > 65535) {
+                fcy_new = fcy / 8;
+                T2CONbits.TCKPS = 1; // prescaler 1:8
+            }
+            if (fcy_new > 65535) {
+                fcy_new = fcy / 64;
+                T2CONbits.TCKPS = 2; // prescaler 1:64
+            }
+            if (fcy_new > 65535) {
+                fcy_new = fcy / 256;
+                T2CONbits.TCKPS = 3; // prescaler 1:256
+            }
+
+            PR2 = fcy_new;
+
             T2CONbits.TON = 1; // start T2
         }
         break;
@@ -112,8 +167,17 @@ void tmr_wait_ms(int timer, int ms) {
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
     IFS0bits.INT0IF = 0; // reset interrupt flag
 
+    btn_press = 0;
     // start timer form 20ms
-    tmr_wait_ms(TIMER2, 20);
+    tmr_setup_period_2(TIMER2, 20);
+}
+
+void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
+    IFS1bits.INT1IF = 0; // reset interrupt flag
+
+    btn_press = 1;
+    // start timer form 20ms
+    tmr_setup_period_2(TIMER2, 20);
 }
 
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
@@ -121,7 +185,11 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
 
     // when timer elapsed read if the btn is still pressed, if not toggle
     int pinValue = 0;
-    pinValue = PORTEbits.RE8;
+
+    if (!btn_press)
+        pinValue = PORTEbits.RE8;
+    else
+        pinValue = PORTDbits.RD0;
 
     if (!pinValue)
         T2CONbits.TON = 0; // stop T2
@@ -129,14 +197,23 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
         // stop T2
         T2CONbits.TON = 0;
 
-        // Send the current number of characters received via UART2
-        char buff[BUFF_SIZE];
-        sprintf(buff, "%d", charCount); // Convert charCount to a string
-        // Send the buffer via UART2
-        for (int i = 0; i < strlen(buff); i++) {
-            while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
-            U2TXREG = buff[i];
+        if (!btn_press) {
+            // Send the current number of characters received via UART2
+            char buff[BUFF_SIZE];
+            sprintf(buff, "%d", charCount); // Convert charCount to a string
+            // Send the buffer via UART2
+            for (int i = 0; i < strlen(buff); i++) {
+                while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
+                U2TXREG = buff[i];
+            }
         }
+        else {
+            LCD_ClearFirstRow();
+            LCD_ClearSecondRow();
+            charCount = 0;
+            UpdateSecondRow();
+        }
+
     }
 }
 
@@ -178,17 +255,23 @@ void LCD_ClearFirstRow() {
     rowCount = 0;
 }
 
+// Function to clear the second row of the LCD
+void LCD_ClearSecondRow() {
+    LCD_SendData(SECOND_ROW);
+
+    for (int i = 0; i < BUFF_SIZE; i++)
+        LCD_SendData(' ');
+}
+
 // Function to update the second row of the LCD with the character count
 void UpdateSecondRow() {
     LCD_SendData(SECOND_ROW);
-    
-    char buff[16];
-    int i = 0;
+
+    char buff[BUFF_SIZE];
 
     sprintf(buff, "Char Recv: %d", charCount);
-    while(buff[i] != '\0') {
+    for (int i = 0; i < strlen(buff); i++) {
         LCD_SendData(buff[i]);
-        i++;
     }
 }
 
@@ -198,13 +281,14 @@ char UART2_ReadChar() {
 }
 
 void algorithm() {
-    tmr_wait_ms(TIMER2, 7);
+    tmr_wait_ms(TIMER1, 7);
 }
 
 int main(void) {
     // Init timers
     tmr_setup_period(TIMER1);
-    tmr_setup_period(TIMER2);
+    // tmr_setup_period(TIMER2);
+    
 
     // Init UART2 and SPI1
     UART2_Init();
@@ -212,10 +296,11 @@ int main(void) {
 
     // Init buttons S5 and S6 as inputs
     TRISEbits.TRISE8 = 1; // S5
-    TRISEbits.TRISE5 = 1; // S6
+    TRISDbits.TRISD0 = 1; // S6
 
     IEC0bits.INT0IE = 1; // enable INT0 interrupt
     IEC0bits.T2IE = 1; // enable T2 interrupt
+    IEC1bits.INT1IE = 1; // enable INT1 interrupt
 
     while (1) {
         algorithm();
