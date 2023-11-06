@@ -240,7 +240,7 @@ void UART2_Init() {
 void LCD_SendData(char data) {
     while(SPI1STATbits.SPITBF == 1); // wait until not full
     SPI1BUF = data;
-    tmr_wait_ms(TIMER1, 1); // TO FIX
+    // tmr_wait_ms(TIMER1, 1);
 }
 
 // Function to clear the first row of the LCD
@@ -273,6 +273,8 @@ void UpdateSecondRow() {
     for (int i = 0; i < strlen(buff); i++) {
         LCD_SendData(buff[i]);
     }
+
+    LCD_SendData(FIRST_ROW + rowCount);
 }
 
 char UART2_ReadChar() {
@@ -287,8 +289,6 @@ void algorithm() {
 int main(void) {
     // Init timers
     tmr_setup_period(TIMER1);
-    // tmr_setup_period(TIMER2);
-    
 
     // Init UART2 and SPI1
     UART2_Init();
