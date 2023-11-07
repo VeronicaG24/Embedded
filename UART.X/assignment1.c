@@ -167,6 +167,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
     IFS1bits.INT1IF = 0; // reset interrupt flag
 
     btn_press = 1;
+
     // start timer form 20ms
     tmr_setup_period_2(TIMER2, 20);
 }
@@ -182,12 +183,9 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     else
         pinValue = PORTDbits.RD0;
 
-    if (!pinValue)
-        T2CONbits.TON = 0; // stop T2
-    else {
-        // stop T2
-        T2CONbits.TON = 0;
+    T2CONbits.TON = 0; // stop T2
 
+    if (pinValue) {
         if (!btn_press) {
             // Send the current number of characters received via UART2
             char buff[BUFF_SIZE];
