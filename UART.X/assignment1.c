@@ -1,4 +1,5 @@
 // Assignment 1 - Embedded Systems
+// Group 6
 // Gabriele Nicchiarelli - S4822677
 // Veronica Gavagna - S5487110
 // Andrea Bolla - S4482930
