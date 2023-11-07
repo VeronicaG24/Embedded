@@ -72,51 +72,40 @@ void tmr_setup_period(int timer) {
 }
 
 void tmr_setup_period_2(int timer, int ms) {
-    switch(timer) {
+    int prescaler = 1;
+    long fcy = (FOSC / 4) * (ms / 1000.0);
+    long fcy_new = fcy;
+
+    if (fcy > 65535) {
+        fcy_new = fcy / 8;
+        prescaler = 1; // prescaler 1:8
+    }
+    if (fcy_new > 65535) {
+        fcy_new = fcy / 64;
+        prescaler = 2; // prescaler 1:64
+    }
+    if (fcy_new > 65535) {
+        fcy_new = fcy / 256;
+        prescaler = 3; // prescaler 1:256
+    }
+
+    switch (timer) {
         case TIMER1: {
             TMR1 = 0; // reset T1 counter
+            IFS0bits.T1IF = 0; // reset T1 flag
 
-            long fcy = (FOSC / 4) * (ms / 1000.0);
-            long fcy_new = fcy;
-
-            if (fcy > 65535) {
-                fcy_new = fcy / 8;
-                T1CONbits.TCKPS = 1; // prescaler 1:8
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 64;
-                T1CONbits.TCKPS = 2; // prescaler 1:64
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 256;
-                T1CONbits.TCKPS = 3; // prescaler 1:256
-            }
-
+            T1CONbits.TCKPS = prescaler;
             PR1 = fcy_new;
 
             T1CONbits.TON = 1; // start T1
         }
         break;
-        
+
         case TIMER2: {
             TMR2 = 0; // reset T2 counter
+            IFS0bits.T2IF = 0; // reset T2 flag
 
-            long fcy = (FOSC / 4) * (ms / 1000.0);
-            long fcy_new = fcy;
-
-            if (fcy > 65535) {
-                fcy_new = fcy / 8;
-                T2CONbits.TCKPS = 1; // prescaler 1:8
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 64;
-                T2CONbits.TCKPS = 2; // prescaler 1:64
-            }
-            if (fcy_new > 65535) {
-                fcy_new = fcy / 256;
-                T2CONbits.TCKPS = 3; // prescaler 1:256
-            }
-
+            T2CONbits.TCKPS = prescaler;
             PR2 = fcy_new;
 
             T2CONbits.TON = 1; // start T2
@@ -215,7 +204,6 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
             charCount = 0;
             UpdateSecondRow();
         }
-
     }
 }
 
