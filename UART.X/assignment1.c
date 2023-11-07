@@ -1,6 +1,9 @@
-// DSPIC30F4011 Configuration Bit Settings
+// Assignment 1 - Embedded Systems
+// Gabriele Nicchiarelli - S4822677
+// Veronica Gavagna - S5487110
+// Andrea Bolla - S4482930
 
-// 'C' source line config statements
+// DSPIC30F4011 Configuration Bit Settings
 
 // FOSC
 #pragma config FPR = XT            // Primary Oscillator Mode (XT)
@@ -32,7 +35,6 @@
 // Use project enums instead of #define for ON and OFF.
 
 #include <xc.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -240,7 +242,6 @@ void UART2_Init() {
 void LCD_SendData(char data) {
     while(SPI1STATbits.SPITBF == 1); // wait until not full
     SPI1BUF = data;
-    // tmr_wait_ms(TIMER1, 1);
 }
 
 // Function to clear the first row of the LCD
