@@ -43,6 +43,7 @@
 #define FOSC 7372800
 #define BAUND 9600
 #define BUFF_SIZE 16
+#define BUFFER_SIZE 64
 #define FIRST_ROW 0x80
 #define SECOND_ROW 0xC0
 #define CR '\r'
@@ -52,6 +53,16 @@ char receivedChar;
 int charCount = 0;
 int rowCount = 0;
 int btn_press = 0; // 0: S5, 1: S6
+
+char circularBuffer[BUFFER_SIZE];
+int readIndex = 0;
+int writeIndex = 0;
+
+/*struct circBuff {
+    char buff[BUFFER_SIZE];
+    int readIdx = 0;
+    int writeIdx = 0;
+};*/
 
 void tmr_setup_period(int timer) {
     switch (timer) {
@@ -193,11 +204,9 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     else
         pinValue = PORTDbits.RD0;
 
-    if (!pinValue)
-        T2CONbits.TON = 0; // stop T2
-    else {
-        // stop T2
-        T2CONbits.TON = 0;
+    T2CONbits.TON = 0; // stop T2
+    
+    if (pinValue) {
 
         if (!btn_press) {
             // Send the current number of characters received via UART2
@@ -287,6 +296,17 @@ void algorithm() {
     tmr_wait_ms(TIMER1, 7);
 }
 
+void __attribute__((interrupt, auto_psv)) _U2RXInterrupt(void) {
+    IFS1bits.U2RXIF = 0;  // Reset del flag di interrupt
+    // Check for received characters from UART2
+    while (U2STAbits.URXDA) {
+        receivedChar = U2RXREG;
+        circularBuffer[readIndex % BUFFER_SIZE] = receivedChar;
+        readIndex++;
+    }
+}
+
+
 int main(void) {
     // Init timers
     tmr_setup_period(TIMER1);
@@ -302,29 +322,36 @@ int main(void) {
     IEC0bits.INT0IE = 1; // enable INT0 interrupt
     IEC0bits.T2IE = 1; // enable T2 interrupt
     IEC1bits.INT1IE = 1; // enable INT1 interrupt
+    IEC1bits.U2RXIE = 1; // enable UART2 interrupt
+    U2STAbits.URXISEL = 3; // 1: per ogni carattere, 2: 3/4 buffer, 3: full
 
     while (1) {
         algorithm();
-
-        // Check for received characters from UART2
+        
         if (U2STAbits.URXDA) {
             receivedChar = U2RXREG;
-
-            // Check for CR and LF characters and handle accordingly
-            if (receivedChar == CR || receivedChar == LF || rowCount == 16)
+            circularBuffer[readIndex % BUFFER_SIZE] = receivedChar;
+            readIndex++;
+        }
+        
+        // Check for CR and LF characters and handle accordingly
+        if (writeIndex < readIndex) {
+            if (circularBuffer[writeIndex % BUFFER_SIZE] == CR || circularBuffer[writeIndex % BUFFER_SIZE] == LF || rowCount == 16) {
                 LCD_ClearFirstRow();
-            else {
+            } else {
                 LCD_SendData(FIRST_ROW + rowCount);
                 // Display the received character on the first row of the LCD
-                LCD_SendData(receivedChar);
+                LCD_SendData(circularBuffer[writeIndex % BUFFER_SIZE]);
                 rowCount++;
                 charCount++;
                 // Update the second row with the character count
                 UpdateSecondRow();
+                writeIndex++;
             }
         }
 
         tmr_wait_ms(TIMER1, 10);
+    
     }
 
     return 0;
