@@ -66,11 +66,11 @@ char circularBuffer[BUFFER_SIZE];
 int readIndex = 0;
 int writeIndex = 0;
 
-/*struct circBuff {
+typedef struct {
     char buff[BUFFER_SIZE];
-    int readIdx = 0;
-    int writeIdx = 0;
-};*/
+    int readIdx;
+    int writeIdx;
+} circBuff;
 
 void tmr_setup_ms(int timer) {
     switch (timer) {
@@ -375,6 +375,15 @@ void __attribute__((interrupt, auto_psv)) _U2RXInterrupt(void) {
     }
 }
 
+int checkByteAveilable() {
+    if(writeIndex <= readIndex) {
+        return readIndex - writeIndex;
+    }
+    else {
+        return BUFFER_SIZE - writeIndex + readIndex;
+    }
+}
+
 void checkIndexes() {
     if((writeIndex % BUFFER_SIZE) - (readIndex % BUFFER_SIZE) < 2 && readIndex > BUFFER_SIZE) {
         writeIndex++;
@@ -413,7 +422,7 @@ int main(void) {
         IEC1bits.U2RXIE = 1; // enable UART2 interrupt
         
         // Check for CR and LF characters and handle accordingly
-        if (writeIndex < readIndex) {
+        if (checkByteAveilable() > 0) {
             if (circularBuffer[writeIndex % BUFFER_SIZE] == CR || circularBuffer[writeIndex % BUFFER_SIZE] == LF) {
                 LCD_ClearFirstRow();
                 writeIndex++;
