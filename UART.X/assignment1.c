@@ -41,10 +41,17 @@
 
 #define TIMER1 1
 #define TIMER2 2
+#define TIMER3 3
 #define FOSC 7372800
 #define BAUND 9600
-#define BUFF_SIZE 16
-#define BUFFER_SIZE 64
+#define LINE_SIZE 16
+/*
+ * baudrate = 9600
+ * read buffer every 10ms
+ * dimension data transmitted = 1start + 1end + 8data = 10bits
+ * (9600bps*0.001s)/10bit = 9.6 --> a little bit bigger: 12
+ */
+#define BUFFER_SIZE 12
 #define FIRST_ROW 0x80
 #define SECOND_ROW 0xC0
 #define CR '\r'
@@ -65,7 +72,7 @@ int writeIndex = 0;
     int writeIdx = 0;
 };*/
 
-void tmr_setup_period(int timer) {
+void tmr_setup_ms(int timer) {
     switch (timer) {
         case TIMER1: {
             TMR1 = 0; // reset T1 counter
@@ -80,10 +87,17 @@ void tmr_setup_period(int timer) {
             T2CONbits.TON = 1; // start T2
         }
         break;
+        
+        case TIMER3: {
+            TMR3 = 0; // reset T3 counter
+            IFS0bits.T3IF = 0; // reset T3 flag
+            T3CONbits.TON = 1; // start T3
+        }
+        break;
     }
 }
 
-void tmr_setup_period_2(int timer, int ms) {
+void tmr_setup_period(int timer, int ms) {
     switch(timer) {
         case TIMER1: {
             TMR1 = 0; // reset T1 counter
@@ -134,6 +148,48 @@ void tmr_setup_period_2(int timer, int ms) {
             T2CONbits.TON = 1; // start T2
         }
         break;
+        
+        case TIMER3: {
+            TMR3 = 0; // reset T3 counter
+
+            long fcy = (FOSC / 4) * (ms / 1000.0);
+            long fcy_new = fcy;
+
+            if (fcy > 65535) {
+                fcy_new = fcy / 8;
+                T2CONbits.TCKPS = 1; // prescaler 1:8
+            }
+            if (fcy_new > 65535) {
+                fcy_new = fcy / 64;
+                T2CONbits.TCKPS = 2; // prescaler 1:64
+            }
+            if (fcy_new > 65535) {
+                fcy_new = fcy / 256;
+                T2CONbits.TCKPS = 3; // prescaler 1:256
+            }
+
+            PR3 = fcy_new;
+
+            T3CONbits.TON = 1; // start T3
+        }
+        break;
+    }
+}
+
+void tmr_wait_period(int timer) {
+    switch(timer) {
+        case TIMER1: {
+            while(!IFS0bits.T1IF);
+            IFS0bits.T1IF = 0;
+        } break;
+        case TIMER2: {
+            while(!IFS0bits.T2IF);
+            IFS0bits.T2IF = 0;
+        } break;
+        case TIMER3: {
+            while(!IFS0bits.T3IF);
+            IFS0bits.T3IF = 0;
+        } break;
     }
 }
 
@@ -175,6 +231,16 @@ void tmr_wait_ms(int timer, int ms) {
             IFS0bits.T2IF = 0;
         }
         break;
+        
+        case TIMER3: {
+            T3CONbits.TCKPS = prescaler;
+            PR3 = fcy_new;
+
+            // wait...
+            while(!IFS0bits.T3IF);
+            IFS0bits.T3IF = 0;
+        }
+        break;
     }
 }
 
@@ -183,7 +249,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
 
     btn_press = 0;
     // start timer form 20ms
-    tmr_setup_period_2(TIMER2, 20);
+    tmr_setup_period(TIMER2, 20);
 }
 
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
@@ -191,7 +257,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
 
     btn_press = 1;
     // start timer form 20ms
-    tmr_setup_period_2(TIMER2, 20);
+    tmr_setup_period(TIMER2, 20);
 }
 
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
@@ -211,7 +277,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
 
         if (!btn_press) {
             // Send the current number of characters received via UART2
-            char buff[BUFF_SIZE];
+            char buff[LINE_SIZE];
             sprintf(buff, "%d", charCount); // Convert charCount to a string
             // Send the buffer via UART2
             for (int i = 0; i < strlen(buff); i++) {
@@ -238,7 +304,7 @@ void SPI1_Init() {
     SPI1STATbits.SPIEN = 1; // enable SPI
 
     // Wait for LCD to go up
-    tmr_wait_ms(TIMER1, 1000);
+    tmr_wait_ms(TIMER3, 1000);
 }
 
 // Function to initialize UART2
@@ -270,7 +336,7 @@ void LCD_ClearFirstRow() {
 void LCD_ClearSecondRow() {
     LCD_SendData(SECOND_ROW);
 
-    for (int i = 0; i < BUFF_SIZE; i++)
+    for (int i = 0; i < LINE_SIZE; i++)
         LCD_SendData(' ');
 }
 
@@ -278,7 +344,7 @@ void LCD_ClearSecondRow() {
 void UpdateSecondRow() {
     LCD_SendData(SECOND_ROW);
 
-    char buff[BUFF_SIZE];
+    char buff[LINE_SIZE];
 
     sprintf(buff, "Char Recv: %d", charCount);
     for (int i = 0; i < strlen(buff); i++) {
@@ -294,24 +360,31 @@ char UART2_ReadChar() {
 }
 
 void algorithm() {
-    tmr_wait_ms(TIMER1, 7);
+    tmr_wait_ms(TIMER3, 7);
 }
 
 void __attribute__((interrupt, auto_psv)) _U2RXInterrupt(void) {
     IFS1bits.U2RXIF = 0;  // Reset del flag di interrupt
     // Check for received characters from UART2
+    
     while (U2STAbits.URXDA) {
+        //checkIndexes();
         receivedChar = U2RXREG;
         circularBuffer[readIndex % BUFFER_SIZE] = receivedChar;
         readIndex++;
     }
 }
 
+void checkIndexes() {
+    if((writeIndex % BUFFER_SIZE) - (readIndex % BUFFER_SIZE) < 2 && readIndex > BUFFER_SIZE) {
+        writeIndex++;
+    }
+}
+
 
 int main(void) {
-    // Init timers
-    tmr_setup_period(TIMER1);
-
+    tmr_setup_ms(TIMER3);
+    
     // Init UART2 and SPI1
     UART2_Init();
     SPI1_Init();
@@ -324,22 +397,31 @@ int main(void) {
     IEC0bits.T2IE = 1; // enable T2 interrupt
     IEC1bits.INT1IE = 1; // enable INT1 interrupt
     IEC1bits.U2RXIE = 1; // enable UART2 interrupt
-    U2STAbits.URXISEL = 3; // 1: per ogni carattere, 2: 3/4 buffer, 3: full
+    U2STAbits.URXISEL = 3; //mode UART2 interrupt 1: every char received, 2: 3/4 buffer, 3: full
 
+    tmr_setup_period(TIMER1, 10);
     while (1) {
         algorithm();
         
-        if (U2STAbits.URXDA) {
+        IEC1bits.U2RXIE = 0; // disable UART2 interrupt
+        while (U2STAbits.URXDA) {
+            //checkIndexes();
             receivedChar = U2RXREG;
             circularBuffer[readIndex % BUFFER_SIZE] = receivedChar;
             readIndex++;
         }
+        IEC1bits.U2RXIE = 1; // enable UART2 interrupt
         
         // Check for CR and LF characters and handle accordingly
         if (writeIndex < readIndex) {
-            if (circularBuffer[writeIndex % BUFFER_SIZE] == CR || circularBuffer[writeIndex % BUFFER_SIZE] == LF || rowCount == 16) {
+            if (circularBuffer[writeIndex % BUFFER_SIZE] == CR || circularBuffer[writeIndex % BUFFER_SIZE] == LF) {
                 LCD_ClearFirstRow();
-            } else {
+                writeIndex++;
+            }
+            else if (rowCount == LINE_SIZE) {
+                LCD_ClearFirstRow();
+            }
+            else {
                 LCD_SendData(FIRST_ROW + rowCount);
                 // Display the received character on the first row of the LCD
                 LCD_SendData(circularBuffer[writeIndex % BUFFER_SIZE]);
@@ -350,8 +432,7 @@ int main(void) {
                 writeIndex++;
             }
         }
-
-        tmr_wait_ms(TIMER1, 10);
+        tmr_wait_period(TIMER1);
     
     }
 
