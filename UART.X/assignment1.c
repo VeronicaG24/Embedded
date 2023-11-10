@@ -275,43 +275,35 @@ void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
 }
 
 // Function to initialize the circular buffer
-void Buff_Init(CircBuff* buff)
-{
+void Buff_Init(CircBuff* buff) {
     buff->size = 0;
     buff->readIndex = 0;
     buff->writeIndex = 0;
 }
 
 // Function to check if the circular buffer is empty
-int Buff_IsEmpty(const CircBuff *buff)
-{
+int Buff_IsEmpty(const CircBuff *buff) {
     return buff->size == 0;
 }
 
 // Function to check if the circular buffer is full
-int Buff_IsFull(const CircBuff *buff)
-{
+int Buff_IsFull(const CircBuff *buff) {
     return buff->size == BUFF_SIZE;
 }
 
 // Function to write a char to the circular buffer
-void Buff_Write(CircBuff *buff, char data)
-{
-    if (!Buff_IsFull(buff))
-    {
+void Buff_Write(CircBuff *buff, char data) {
+    if (!Buff_IsFull(buff)) {
         buff->buff[buff->writeIndex] = data;
         buff->writeIndex = (buff->writeIndex + 1) % BUFF_SIZE;
         buff->size++;
     }
-    // Note: You might want to handle the case when the buffer is full (e.g., drop data or raise an error)
 }
 
 // Function to read a char from the circular buffer
-char Buff_Read(CircBuff *buff)
-{
+char Buff_Read(CircBuff *buff) {
     char data = '\0'; // Default value if the buffer is empty
-    if (!Buff_IsEmpty(buff))
-    {
+    if (!Buff_IsEmpty(buff)) {
         data = buff->buff[buff->readIndex];
         buff->readIndex = (buff->readIndex + 1) % BUFF_SIZE;
         buff->size--;
@@ -321,13 +313,13 @@ char Buff_Read(CircBuff *buff)
 
 // Function to initialize SPI1 for LCD
 void SPI1_Init() {
-    SPI1CONbits.MSTEN = 1; // master mode
+    SPI1CONbits.MSTEN = 1;  // master mode
     SPI1CONbits.MODE16 = 0; // 8-bit mode --> 1MHz
-    SPI1CONbits.PPRE = 3; // 1:1 primary prescaler
-    SPI1CONbits.SPRE = 3; // 5:1 secondary prescaler
+    SPI1CONbits.PPRE = 3;   // 1:1 primary prescaler
+    SPI1CONbits.SPRE = 3;   // 5:1 secondary prescaler
     SPI1STATbits.SPIEN = 1; // enable SPI
 
-    // Wait for LCD to go up
+    // Wait for the LCD to go up
     tmr_wait_ms(TIMER3, 1000);
 }
 
@@ -338,73 +330,71 @@ void UART2_Init() {
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
 }
 
-// Function to send data to the LCD via SPI1
-void LCD_SendData(char data) {
-    while(SPI1STATbits.SPITBF == 1); // wait until not full
+// Function to send data to the LCD
+void LCD_WriteChar(char data) {
+    while (SPI1STATbits.SPITBF == 1); // wait until buffer not full
     SPI1BUF = data;
 }
 
 // Function to clear the first row of the LCD
-void LCD_ClearFirstRow() {
-    LCD_SendData(FIRST_ROW);
+void LCD_ClearFirstRow() { ////// UNIRE LE ClearRow IN UN'UNICA FUNTIONE
+    LCD_WriteChar(FIRST_ROW);
 
     for (int i = 0; i < rowCount; i++)
-        LCD_SendData(' ');
+        LCD_WriteChar(' ');
 
-    LCD_SendData(FIRST_ROW);
+    LCD_WriteChar(FIRST_ROW);
 
     rowCount = 0;
 }
 
 // Function to clear the second row of the LCD
 void LCD_ClearSecondRow() {
-    LCD_SendData(SECOND_ROW);
+    LCD_WriteChar(SECOND_ROW);
 
     for (int i = 0; i < LINE_SIZE; i++)
-        LCD_SendData(' ');
+        LCD_WriteChar(' ');
 }
 
 // Function to update the second row of the LCD with the character count
-void UpdateSecondRow() {
-    LCD_SendData(SECOND_ROW);
+void UpdateSecondRow() { //////// DA SISTEMARE, NON RISCRIVERE Char recv ogni volta
+    LCD_WriteChar(SECOND_ROW);
 
     char buff[LINE_SIZE];
 
     sprintf(buff, "Char Recv: %d", charCount);
-    for (int i = 0; i < strlen(buff); i++) {
-        LCD_SendData(buff[i]);
-    }
+    for (int i = 0; i < strlen(buff); i++)
+        LCD_WriteChar(buff[i]);
 
-    LCD_SendData(FIRST_ROW + rowCount);
+    LCD_WriteChar(FIRST_ROW + rowCount);
 }
 
+// Function to read a char from the UART2
 char UART2_ReadChar() {
-    while (!U2STAbits.URXDA); // Wait until data is received
-    return U2RXREG; // Return the received data
+    while (!U2STAbits.URXDA); // wait until data is received
+    return U2RXREG;
 }
 
+// Algorithm function that runs for 7ms
 void algorithm() {
     tmr_wait_ms(TIMER3, 7);
 }
 
+// Function to check if there are characters to flush on the LCD
 int checkAvailableBytes() {
-    if(writeIndex <= readIndex) {
+    if(writeIndex <= readIndex)
         return readIndex - writeIndex;
-    }
-    else {
+    else
         return BUFF_SIZE - writeIndex + readIndex;
-    }
 }
 
 void checkIndexes() {
-    if((writeIndex % BUFF_SIZE) - (readIndex % BUFF_SIZE) < 2 && readIndex > BUFF_SIZE) {
+    if((writeIndex % BUFF_SIZE) - (readIndex % BUFF_SIZE) < 2 && readIndex > BUFF_SIZE)
         writeIndex++;
-    }
 }
 
-
 int main(void) {
-    // Init timer
+    // Init timer 3
     tmr_setup_ms(TIMER3);
 
     // Init UART2 and SPI1
@@ -415,28 +405,31 @@ int main(void) {
     TRISEbits.TRISE8 = 1; // S5
     TRISDbits.TRISD0 = 1; // S6
 
-    IEC0bits.INT0IE = 1; // enable INT0 interrupt
-    IEC0bits.T2IE = 1; // enable T2 interrupt
-    IEC1bits.INT1IE = 1; // enable INT1 interrupt
-    IEC1bits.U2RXIE = 1; // enable UART2 interrupt
-    U2STAbits.URXISEL = 3; //mode UART2 interrupt 1: every char received, 2: 3/4 buffer, 3: full
+    // Enable interrupts
+    IEC0bits.INT0IE = 1; // INT0
+    IEC1bits.INT1IE = 1; // INT1
+    IEC0bits.T2IE = 1;   // T2
+    IEC1bits.U2RXIE = 1; // UART2
+    U2STAbits.URXISEL = 3; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
 
+    // Init and setup timer 1
     tmr_setup_period(TIMER1, 10);
 
+    // Main loop
     while (1) {
         algorithm();
         
         IEC1bits.U2RXIE = 0; // Disable UART2 interrupt
         while (U2STAbits.URXDA) {
-            //checkIndexes();
+            // checkIndexes();
             receivedChar = U2RXREG;
             circularBuffer[readIndex % BUFF_SIZE] = receivedChar;
             readIndex++;
         }
         IEC1bits.U2RXIE = 1; // Enable UART2 interrupt
-        
-        // Check for CR and LF characters and handle accordingly
-        if (checkAvailableBytes() > 0) {
+
+        // If there are chars to read from the buffer
+        if (checkAvailableBytes() > 0) { ///////// DA CONVERTIRE IN WHILE
             if (circularBuffer[writeIndex % BUFF_SIZE] == CR || circularBuffer[writeIndex % BUFF_SIZE] == LF) {
                 LCD_ClearFirstRow();
                 writeIndex++;
@@ -445,18 +438,19 @@ int main(void) {
                 LCD_ClearFirstRow();
             }
             else {
-                LCD_SendData(FIRST_ROW + rowCount);
-                // Display the received character on the first row of the LCD
-                LCD_SendData(circularBuffer[writeIndex % BUFF_SIZE]);
+                LCD_WriteChar(FIRST_ROW + rowCount);
+                LCD_WriteChar(circularBuffer[writeIndex % BUFF_SIZE]);
+
                 rowCount++;
                 charCount++;
+
                 // Update the second row with the character count
                 UpdateSecondRow();
                 writeIndex++;
             }
         }
+
         tmr_wait_period(TIMER1);
-    
     }
 
     return 0;
