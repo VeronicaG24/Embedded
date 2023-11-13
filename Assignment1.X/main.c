@@ -52,26 +52,26 @@
 #define CR '\r'
 #define LF '\n'
 
-/* How to compute the buffer size:
- * baudrate = 9600
+/* How to compute the circular buffer size:
+ * baud rate = 9600
  * read time = 10ms
  * bits transmitted = 1start + 1end + 8data = 10bits
  * (9600bps*0.001s)/10bits = 9.6 --> a little bit bigger: 12
  */
 
+// Circular buffer structure
 typedef struct {
     char buff[BUFF_SIZE];
     int readIdx;
     int writeIdx;
 } CircBuff;
 
-CircBuff circBuff; // Circular buffer
+CircBuff circBuff;
 
-char receivedChar; // Received character
-int charCount = 0; // Numeber of characters
-int rowCount = 0;  // Row index
-int btn_press = 0; // Flag to select which btn was pressed (0: S5, 1: S6)
-int char_recv_len = 0;
+int charCount = 0;     // Numeber of characters
+int rowCount = 0;      // Row index
+int btn_press = 0;     // Flag to select which btn was pressed (0: S5, 1: S6)
+int char_recv_len = 0; // Length of the string "Char Recv: "
 
 void tmr_setup_ms(int timer) {
     switch (timer) {
@@ -211,26 +211,30 @@ void tmr_wait_period(int timer) {
     }
 }
 
+// Button S5 interrupt
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
     IFS0bits.INT0IF = 0; // reset interrupt flag
     btn_press = 0;
-    // start timer form 20ms
+    // start timer (20ms)
     tmr_setup_period(TIMER2, 20);
 }
 
+// Button S6 interrupt
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
     IFS1bits.INT1IF = 0; // reset interrupt flag
     btn_press = 1;
-    // start timer form 20ms
+    // start timer (20ms)
     tmr_setup_period(TIMER2, 20);
 }
 
+// Timer T2 interrupt
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     IFS0bits.T2IF = 0; // reset interrupt flag
 
     // when timer elapsed read if the btn is still pressed, if not toggle
     int pinValue = 0;
 
+    // Select the btn
     if (!btn_press)
         pinValue = PORTEbits.RE8;
     else
@@ -258,6 +262,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     }
 }
 
+// UART2 interrupt
 void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
     IFS1bits.U2RXIF = 0;  // Reset del flag di interrupt
     // Check for received characters from UART2
@@ -346,7 +351,7 @@ void UpdateSecondRow() {
     LCD_WriteChar(FIRST_ROW + rowCount);
 }
 
-void InitSecondRow() {
+void SecondRow_Init() {
     LCD_WriteChar(SECOND_ROW);
 
     char buff[LINE_SIZE];
@@ -395,7 +400,7 @@ int main(void) {
     Buff_Init(&circBuff);
     
     // Init second row with "Char Recv: "
-    InitSecondRow();
+    SecondRow_Init();
 
     // Init and setup timer 1
     tmr_setup_period(TIMER1, 10);
