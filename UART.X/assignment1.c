@@ -62,20 +62,16 @@
 typedef struct {
     char buff[BUFF_SIZE];
     int size;
-    int readIndex;
-    int writeIndex;
+    int readIdx;
+    int writeIdx;
 } CircBuff;
 
-CircBuff buff; // Circular buffer
+CircBuff circBuff; // Circular buffer
 
 char receivedChar; // Received character
 int charCount = 0; // Numeber of characters
 int rowCount = 0;  // Row index
 int btn_press = 0; // Flag to select which btn was pressed (0: S5, 1: S6)
-
-char circularBuffer[BUFF_SIZE];
-int readIndex = 0;
-int writeIndex = 0;
 
 void tmr_setup_ms(int timer) {
     switch (timer) {
@@ -265,20 +261,15 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
 void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
     IFS1bits.U2RXIF = 0;  // Reset del flag di interrupt
     // Check for received characters from UART2
-    
-    while (U2STAbits.URXDA) {
-        //checkIndexes();
-        receivedChar = U2RXREG;
-        circularBuffer[readIndex % BUFF_SIZE] = receivedChar;
-        readIndex++;
-    }
+    while (U2STAbits.URXDA)
+        Buff_Write(&circBuff, U2RXREG);
 }
 
 // Function to initialize the circular buffer
 void Buff_Init(CircBuff* buff) {
     buff->size = 0;
-    buff->readIndex = 0;
-    buff->writeIndex = 0;
+    buff->readIdx = 0;
+    buff->writeIdx = 0;
 }
 
 // Function to check if the circular buffer is empty
@@ -293,21 +284,18 @@ int Buff_IsFull(const CircBuff *buff) {
 
 // Function to write a char to the circular buffer
 void Buff_Write(CircBuff *buff, char data) {
-    if (!Buff_IsFull(buff)) {
-        buff->buff[buff->writeIndex] = data;
-        buff->writeIndex = (buff->writeIndex + 1) % BUFF_SIZE;
-        buff->size++;
-    }
+    // If writeIdx - readIdx == 1, then thorugh away the oldest character
+    if ((buff->readIdx % BUFF_SIZE) - (buff->writeIdx % BUFF_SIZE) < 2 && buff->writeIdx > BUFF_SIZE)
+        buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
+
+    buff->buff[buff->writeIdx] = data;
+    buff->writeIdx = (buff->writeIdx + 1) % BUFF_SIZE;
 }
 
 // Function to read a char from the circular buffer
 char Buff_Read(CircBuff *buff) {
-    char data = '\0'; // Default value if the buffer is empty
-    if (!Buff_IsEmpty(buff)) {
-        data = buff->buff[buff->readIndex];
-        buff->readIndex = (buff->readIndex + 1) % BUFF_SIZE;
-        buff->size--;
-    }
+    char data = buff->buff[buff->readIdx];
+    buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
     return data;
 }
 
@@ -369,28 +357,17 @@ void UpdateSecondRow() { //////// DA SISTEMARE, NON RISCRIVERE Char recv ogni vo
     LCD_WriteChar(FIRST_ROW + rowCount);
 }
 
-// Function to read a char from the UART2
-char UART2_ReadChar() {
-    while (!U2STAbits.URXDA); // wait until data is received
-    return U2RXREG;
-}
-
 // Algorithm function that runs for 7ms
 void algorithm() {
     tmr_wait_ms(TIMER3, 7);
 }
 
 // Function to check if there are characters to flush on the LCD
-int checkAvailableBytes() {
-    if(writeIndex <= readIndex)
-        return readIndex - writeIndex;
+int checkAvailableBytes(CircBuff* buff) {
+    if(buff->readIdx <= buff->writeIdx)
+        return buff->writeIdx - buff->readIdx;
     else
-        return BUFF_SIZE - writeIndex + readIndex;
-}
-
-void checkIndexes() {
-    if((writeIndex % BUFF_SIZE) - (readIndex % BUFF_SIZE) < 2 && readIndex > BUFF_SIZE)
-        writeIndex++;
+        return BUFF_SIZE - buff->readIdx + buff->writeIdx;
 }
 
 int main(void) {
@@ -411,6 +388,9 @@ int main(void) {
     IEC0bits.T2IE = 1;   // T2
     IEC1bits.U2RXIE = 1; // UART2
     U2STAbits.URXISEL = 3; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
+    
+    // Init circular buffer
+    Buff_Init(&circBuff);
 
     // Init and setup timer 1
     tmr_setup_period(TIMER1, 10);
@@ -420,33 +400,28 @@ int main(void) {
         algorithm();
         
         IEC1bits.U2RXIE = 0; // Disable UART2 interrupt
-        while (U2STAbits.URXDA) {
-            // checkIndexes();
-            receivedChar = U2RXREG;
-            circularBuffer[readIndex % BUFF_SIZE] = receivedChar;
-            readIndex++;
-        }
+        while (U2STAbits.URXDA)
+            Buff_Write(&circBuff, U2RXREG);
         IEC1bits.U2RXIE = 1; // Enable UART2 interrupt
 
         // If there are chars to read from the buffer
-        if (checkAvailableBytes() > 0) { ///////// DA CONVERTIRE IN WHILE
-            if (circularBuffer[writeIndex % BUFF_SIZE] == CR || circularBuffer[writeIndex % BUFF_SIZE] == LF) {
+        while (checkAvailableBytes(&circBuff) > 0) {
+            if (circBuff.buff[circBuff.readIdx] == CR || circBuff.buff[circBuff.readIdx] == LF) {
                 LCD_ClearFirstRow();
-                writeIndex++;
+                circBuff.readIdx = (circBuff.readIdx + 1) % BUFF_SIZE;
             }
             else if (rowCount == LINE_SIZE) {
                 LCD_ClearFirstRow();
             }
             else {
                 LCD_WriteChar(FIRST_ROW + rowCount);
-                LCD_WriteChar(circularBuffer[writeIndex % BUFF_SIZE]);
+                LCD_WriteChar(Buff_Read(&circBuff));
 
                 rowCount++;
                 charCount++;
 
                 // Update the second row with the character count
                 UpdateSecondRow();
-                writeIndex++;
             }
         }
 

@@ -28,10 +28,10 @@
         <targetDevice>dsPIC30F4011</targetDevice>
         <targetHeader></targetHeader>
         <targetPluginBoard></targetPluginBoard>
-        <platformTool>PICkit3PlatformTool</platformTool>
+        <platformTool>Simulator</platformTool>
         <languageToolchain>XC16</languageToolchain>
         <languageToolchainVersion>2.10</languageToolchainVersion>
-        <platform>4</platform>
+        <platform>3</platform>
       </toolsSet>
       <packs>
         <pack name="dsPIC30F_DFP" vendor="Microchip" version="1.4.104"/>
