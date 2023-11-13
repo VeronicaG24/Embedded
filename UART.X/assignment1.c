@@ -62,8 +62,8 @@
 typedef struct {
     char buff[BUFF_SIZE];
     int size;
-    int readIndex;
-    int writeIndex;
+    int writeIdx;
+    int readIdx;
 } CircBuff;
 
 CircBuff buff; // Circular buffer
@@ -74,8 +74,6 @@ int rowCount = 0;  // Row index
 int btn_press = 0; // Flag to select which btn was pressed (0: S5, 1: S6)
 
 char circularBuffer[BUFF_SIZE];
-int readIndex = 0;
-int writeIndex = 0;
 
 void tmr_setup_ms(int timer) {
     switch (timer) {
@@ -269,16 +267,16 @@ void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
     while (U2STAbits.URXDA) {
         //checkIndexes();
         receivedChar = U2RXREG;
-        circularBuffer[readIndex % BUFF_SIZE] = receivedChar;
-        readIndex++;
+        circularBuffer[buff.writeIdx % BUFF_SIZE] = receivedChar;
+        buff.writeIdx++;
     }
 }
 
 // Function to initialize the circular buffer
 void Buff_Init(CircBuff* buff) {
     buff->size = 0;
-    buff->readIndex = 0;
-    buff->writeIndex = 0;
+    buff->writeIdx = 0;
+    buff->readIdx = 0;
 }
 
 // Function to check if the circular buffer is empty
@@ -294,8 +292,8 @@ int Buff_IsFull(const CircBuff *buff) {
 // Function to write a char to the circular buffer
 void Buff_Write(CircBuff *buff, char data) {
     if (!Buff_IsFull(buff)) {
-        buff->buff[buff->writeIndex] = data;
-        buff->writeIndex = (buff->writeIndex + 1) % BUFF_SIZE;
+        buff->buff[buff->readIdx] = data;
+        buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
         buff->size++;
     }
 }
@@ -304,8 +302,8 @@ void Buff_Write(CircBuff *buff, char data) {
 char Buff_Read(CircBuff *buff) {
     char data = '\0'; // Default value if the buffer is empty
     if (!Buff_IsEmpty(buff)) {
-        data = buff->buff[buff->readIndex];
-        buff->readIndex = (buff->readIndex + 1) % BUFF_SIZE;
+        data = buff->buff[buff->writeIdx];
+        buff->writeIdx = (buff->writeIdx + 1) % BUFF_SIZE;
         buff->size--;
     }
     return data;
@@ -382,15 +380,15 @@ void algorithm() {
 
 // Function to check if there are characters to flush on the LCD
 int checkAvailableBytes() {
-    if(writeIndex <= readIndex)
-        return readIndex - writeIndex;
+    if(buff.readIdx <= buff.writeIdx)
+        return buff.writeIdx - buff.readIdx;
     else
-        return BUFF_SIZE - writeIndex + readIndex;
+        return BUFF_SIZE - buff.readIdx + buff.writeIdx;
 }
 
 void checkIndexes() {
-    if((writeIndex % BUFF_SIZE) - (readIndex % BUFF_SIZE) < 2 && readIndex > BUFF_SIZE)
-        writeIndex++;
+    if((buff.readIdx % BUFF_SIZE) - (buff.writeIdx % BUFF_SIZE) < 2 && buff.writeIdx > BUFF_SIZE)
+        buff.readIdx++;
 }
 
 int main(void) {
@@ -423,30 +421,30 @@ int main(void) {
         while (U2STAbits.URXDA) {
             // checkIndexes();
             receivedChar = U2RXREG;
-            circularBuffer[readIndex % BUFF_SIZE] = receivedChar;
-            readIndex++;
+            circularBuffer[buff.writeIdx % BUFF_SIZE] = receivedChar;
+            buff.writeIdx++;
         }
         IEC1bits.U2RXIE = 1; // Enable UART2 interrupt
 
         // If there are chars to read from the buffer
-        if (checkAvailableBytes() > 0) { ///////// DA CONVERTIRE IN WHILE
-            if (circularBuffer[writeIndex % BUFF_SIZE] == CR || circularBuffer[writeIndex % BUFF_SIZE] == LF) {
+        while (checkAvailableBytes() > 0) { ///////// DA CONVERTIRE IN WHILE
+            if (circularBuffer[buff.readIdx % BUFF_SIZE] == CR || circularBuffer[buff.readIdx % BUFF_SIZE] == LF) {
                 LCD_ClearFirstRow();
-                writeIndex++;
+                buff.readIdx++;
             }
             else if (rowCount == LINE_SIZE) {
                 LCD_ClearFirstRow();
             }
             else {
                 LCD_WriteChar(FIRST_ROW + rowCount);
-                LCD_WriteChar(circularBuffer[writeIndex % BUFF_SIZE]);
+                LCD_WriteChar(circularBuffer[buff.readIdx % BUFF_SIZE]);
 
                 rowCount++;
                 charCount++;
 
                 // Update the second row with the character count
                 UpdateSecondRow();
-                writeIndex++;
+                buff.readIdx++;
             }
         }
 
