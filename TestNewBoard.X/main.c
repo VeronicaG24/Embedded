@@ -4,6 +4,7 @@
 // 'C' source line config statements
 
 // FGS
+/*
 #pragma config GWRP = OFF               // General Segment Write-Protect bit (General Segment may be written)
 #pragma config GSS = OFF                // General Segment Code-Protect bit (General Segment Code protect is disabled)
 #pragma config GSSK = OFF               // General Segment Key bits (General Segment Write Protection and Code Protection is Disabled)
@@ -40,6 +41,7 @@
 #pragma config AWRP = OFF               // Auxiliary Segment Write-protect bit (Auxiliary program memory is not write-protected)
 #pragma config APL = OFF                // Auxiliary Segment Code-protect bit (Aux Flash Code protect is disabled)
 #pragma config APLK = OFF               // Auxiliary Segment Key bits (Aux Flash Write Protection and Code Protection is Disabled)
+*/
 
 #include <xc.h>
 
@@ -162,7 +164,7 @@ void tmr_wait_ms(int timer, int ms) {
     }
 }
 
-void Init_Timer() {
+void initTimer() {
     PLLFBD = 6; // M = 8
     CLKDIVbits.PLLPOST = 0x00; // N1 = 2
     CLKDIVbits.PLLPRE = 0x00; // N2 = 2
@@ -172,11 +174,14 @@ void Init_Timer() {
     }; // Wait for PLL to lock
 }
 
-int main() {
-    Init_Timer();
-
+void initPins() {
     TRISAbits.TRISA0 = 0; // led A0 as output
-    TRISEbits.TRISE8 = 1; // btn E8 as input
+    TRISAbits.TRISA15 = 1; // btn E8 as input
+}
+
+int main() {
+    initTimer();
+    initPins();
 
     int btnValue = 0; // btn E8 value
     int period = 1000; // ms
@@ -189,7 +194,7 @@ int main() {
     LATAbits.LATA0 = 0; // initially led off
 
     while (1) {
-        btnValue = PORTEbits.RE8;
+        btnValue = PORTAbits.RA15;
 
         if (!btnValue) mult++;
 
