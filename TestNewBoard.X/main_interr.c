@@ -1,4 +1,5 @@
-/*#include <xc.h>
+/*
+#include <xc.h>
 
 #define TIMER1 1
 #define TIMER2 2

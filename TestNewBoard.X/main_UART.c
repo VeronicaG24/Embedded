@@ -1,3 +1,4 @@
+/*
 #include <xc.h>
 
 #define TIMER1 1
@@ -123,9 +124,8 @@ void initPins() {
 }
 
 void initUART2() {
-    const int fosc_uart = 7372800;
     const int baund = 9600;
-    U2BRG = (fosc_uart / 4) / (16L * baund) - 1; // = 11
+    U2BRG = (FOSC / 2) / (16L * baund) - 1; // = 11
     U2MODEbits.UARTEN = 1; // enable UART2
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
 }
@@ -139,8 +139,9 @@ int main() {
     RPOR0bits.RP64R = 0x03;
     RPINR19bits.U2RXR = 0x4B;
 
-    while (1)
-        U2TXREG = 'c';
+    U2TXREG = 'C';
+    while(1);
 
     return 0;
 }
+*/
