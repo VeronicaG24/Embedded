@@ -7,8 +7,6 @@
 #define TIMER2 2
 #define FOSC 144000000
 
-
-
 void tmr_setup_period(int timer, int ms) {
     int prescaler = 1;
     long fcy = (FOSC / 2) * (ms / 1000.0); // number of clocks in one second
@@ -129,7 +127,7 @@ void initPins() {
 
 void initUART2() {
     const int baund = 9600;
-    U2BRG = (FOSC / 2) / (16L * baund) - 1; // = 11
+    U2BRG = (FOSC / 2) / (16L * baund) - 1;
     U2MODEbits.UARTEN = 1; // enable UART2
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
 }
@@ -146,19 +144,17 @@ void initADC1() {
     TRISBbits.TRISB4 = 1; // enable pin sensor
     AD1CON1bits.ADON = 1; // turn on ADC1     
 }
+
 int main() {
-    
     ANSELA = ANSELB = ANSELC = ANSELD = ANSELE = ANSELG = 0x0000;
+
     initPins();
     initUART2();
-    
+    initADC1();
+
     char buff[16];
     float read_value;
     float y;
-    
-   
-    
-    initADC1();
 
     // Remap UART2 pins
     RPOR0bits.RP64R = 0x03;
@@ -170,11 +166,10 @@ int main() {
     
     // Read from sensor
     read_value = ADC1BUF0; 
-    
+
     // formula altezza
     y = 2.34 - 4.74*read_value + 4.06 * read_value*read_value - 1.60 * read_value*read_value*read_value + 0.24 * read_value*read_value*read_value*read_value;
-    
-    
+
     sprintf(buff, "%d", y);
     for (int i = 0; i < strlen(buff); i++){
         while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty

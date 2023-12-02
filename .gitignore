@@ -13,7 +13,6 @@
 *.production
 *.debug
 html/
-nbproject/private/
 nbproject/Package-*.bash
 build/
 nbbuild/
