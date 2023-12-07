@@ -141,8 +141,27 @@ void initADC1() {
     AD1CHS0bits.CH0SA = 5; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
     //AD1CHS123bits.CH123SA = 2 ; // selects the inputs to channels 1, 2 and 3:  Select AN2 for CH1 +ve input
     ANSELBbits.ANSB5 = 1; // Set the appropriate bits to 0 for analog input pins
-    TRISBbits.TRISB4 = 1; // enable pin sensor
+    TRISBbits.TRISB4 = 0; // enable pin sensor
+    LATBbits.LATB4 = 1;
     AD1CON1bits.ADON = 1; // turn on ADC1     
+}
+
+void initPWM() {
+    OC1CON1bits.OCTSEL = 7; // Internal clock
+    OC1CON2bits.SYNCSEL = 0x1F; // No sync source
+    OC1CON1bits.OCM = 6; // Edge-aligned PWM mode
+    PTCONbits.PTEN = 1;
+}
+
+void setPWMFreq(unsigned int f) {
+    unsigned int fcy = FOSC / 2;
+    unsigned int prescaler = 1;
+
+    // Update the PTPER register with the new period value
+    PTPER = fcy / (f * prescaler) - 1;
+
+    OC1R = PTPER * dutyCycle;
+    OC1RS = OC1R;
 }
 
 int main() {
@@ -151,10 +170,11 @@ int main() {
     initPins();
     initUART2();
     initADC1();
+    initPWM();
 
-    char buff[16];
+    /* char buff[16];
     float read_value;
-    float y;
+    double y;
 
     // Remap UART2 pins
     RPOR0bits.RP64R = 0x03;
@@ -168,13 +188,14 @@ int main() {
     read_value = ADC1BUF0; 
 
     // formula altezza
-    y = 2.34 - 4.74*read_value + 4.06 * read_value*read_value - 1.60 * read_value*read_value*read_value + 0.24 * read_value*read_value*read_value*read_value;
+    double volts = read_value / 1023.0 * 3.3;
+    y = 2.34 - 4.74*volts + 4.06 * volts*volts - 1.60 * volts*volts*volts + 0.24 * volts*volts*volts*volts;
 
     sprintf(buff, "%d", y);
     for (int i = 0; i < strlen(buff); i++){
-        while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
+        while (U2STAbits.UTXBF); // Wait for UART2 transmit buffer to be empty
         U2TXREG = buff[i];
-    }
+    } */
     while(1);
 
     return 0;
