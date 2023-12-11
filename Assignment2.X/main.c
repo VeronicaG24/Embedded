@@ -146,22 +146,29 @@ void initADC1() {
     AD1CON1bits.ADON = 1; // turn on ADC1     
 }
 
-void initPWM() {
-    OC1CON1bits.OCTSEL = 7; // Internal clock
+void initOCPWM() {
+    OC1CON1bits.OCTSEL = 7; // Peripheral clock
     OC1CON2bits.SYNCSEL = 0x1F; // No sync source
     OC1CON1bits.OCM = 6; // Edge-aligned PWM mode
     PTCONbits.PTEN = 1;
 }
 
-void setPWMFreq(unsigned int f) {
-    unsigned int fcy = FOSC / 2;
-    unsigned int prescaler = 1;
+void setPWMFreq(int f) {
+    int fcy = FOSC / 2;
+    int prescaler = 1;
 
     // Update the PTPER register with the new period value
     PTPER = fcy / (f * prescaler) - 1;
 
-    OC1R = PTPER * dutyCycle;
+    OC1R = PTPER * 0.4;
     OC1RS = OC1R;
+}
+
+void remapOCPins() {
+    RPOR0bits.RP65R = 0x10;
+    RPOR1bits.RP66R = 0x11;
+    RPOR1bits.RP67R = 0x12;
+    RPOR2bits.RP68R = 0x13;
 }
 
 int main() {
@@ -170,7 +177,9 @@ int main() {
     initPins();
     initUART2();
     initADC1();
-    initPWM();
+    initOCPWM();
+    remapOCPins();
+    setPWMFreq(10000);
 
     /* char buff[16];
     float read_value;
@@ -196,7 +205,9 @@ int main() {
         while (U2STAbits.UTXBF); // Wait for UART2 transmit buffer to be empty
         U2TXREG = buff[i];
     } */
-    while(1);
+    while(1) {
+        setPWMFreq(10000);
+    }
 
     return 0;
 }
