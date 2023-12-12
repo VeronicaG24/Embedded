@@ -120,9 +120,9 @@ void tmr_wait_ms(int timer, int ms) {
 }
 
 void initPins() {
-    TRISAbits.TRISA0 = 0;
-    TRISGbits.TRISG9 = 0;
-    TRISEbits.TRISE8 = 1;
+    TRISAbits.TRISA0 = 0; // led A0 as output
+    // TRISGbits.TRISG9 = 0;
+    // TRISEbits.TRISE8 = 1;
 }
 
 void initUART2() {
@@ -130,6 +130,11 @@ void initUART2() {
     U2BRG = (FOSC / 2) / (16L * baund) - 1;
     U2MODEbits.UARTEN = 1; // enable UART2
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
+}
+
+void remapUARTPins() {
+    RPOR0bits.RP64R = 0x03;
+    RPINR19bits.U2RXR = 0x4B;
 }
 
 void initADC1() {
@@ -147,21 +152,25 @@ void initADC1() {
 }
 
 void initOCPWM() {
+    // OC1
     OC1CON1bits.OCTSEL = 7; // Peripheral clock
     OC1CON2bits.SYNCSEL = 0x1F; // No sync source
     OC1CON1bits.OCM = 6; // Edge-aligned PWM mode
-    PTCONbits.PTEN = 1;
-}
+    
+    // OC2
+    OC2CON1bits.OCTSEL = 7; // Peripheral clock
+    OC2CON2bits.SYNCSEL = 0x1F; // No sync source
+    OC2CON1bits.OCM = 6; // Edge-aligned PWM mode
 
-void setPWMFreq(int f) {
-    int fcy = FOSC / 2;
-    int prescaler = 1;
+    // OC3
+    OC3CON1bits.OCTSEL = 7; // Peripheral clock
+    OC3CON2bits.SYNCSEL = 0x1F; // No sync source
+    OC3CON1bits.OCM = 6; // Edge-aligned PWM mode
 
-    // Update the PTPER register with the new period value
-    PTPER = fcy / (f * prescaler) - 1;
-
-    OC1R = PTPER * 0.4;
-    OC1RS = OC1R;
+    // OC4
+    OC4CON1bits.OCTSEL = 7; // Peripheral clock
+    OC4CON2bits.SYNCSEL = 0x1F; // No sync source
+    OC4CON1bits.OCM = 6; // Edge-aligned PWM mode
 }
 
 void remapOCPins() {
@@ -171,6 +180,14 @@ void remapOCPins() {
     RPOR2bits.RP68R = 0x13;
 }
 
+void waitForStart()
+{
+    OC1R = 0;
+    OC2R = 0;
+    OC3R = 0;
+    OC4R = 0;
+}
+
 int main() {
     ANSELA = ANSELB = ANSELC = ANSELD = ANSELE = ANSELG = 0x0000;
 
@@ -178,16 +195,42 @@ int main() {
     initUART2();
     initADC1();
     initOCPWM();
+
+    remapUARTPins();
     remapOCPins();
-    setPWMFreq(10000);
+
+    tmr_setup_period(TIMER1, 1);
+    int count = 0;
+    int start = 0;
+
+    while(1) {
+        if (!start)
+        {
+            waitForStart();
+            if (count == 1000)
+            {
+                LATAbits.LATA0 = !LATAbits.LATA0;
+                count = 0;
+            }
+        }
+        tmr_wait_period(TIMER1);
+        count++;
+    };
+
+
+
+    return 0;
+}
+
+
+
 
     /* char buff[16];
     float read_value;
     double y;
 
     // Remap UART2 pins
-    RPOR0bits.RP64R = 0x03;
-    RPINR19bits.U2RXR = 0x4B;
+    remapUARTPins();
 
     // start sampling
     AD1CON1bits.SAMP = 1;
@@ -205,9 +248,3 @@ int main() {
         while (U2STAbits.UTXBF); // Wait for UART2 transmit buffer to be empty
         U2TXREG = buff[i];
     } */
-    while(1) {
-        setPWMFreq(10000);
-    }
-
-    return 0;
-}
