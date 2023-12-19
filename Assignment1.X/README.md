@@ -2,9 +2,6 @@
 
 >Due date: 12/11/2023
 
-##### Assignment folder
-The assignment is the `UART.X` *MPLAB* project directory.
-
 ## Assignment description
 
 - [x] Simulate an algorithm that needs `7ms` for its execution and needs to work at `100Hz`. This is to emulate a real-world scenario. 
