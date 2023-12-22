@@ -173,12 +173,14 @@ void initADC1() {
     AD1CON1bits.SSRC = 7; // automatic convertion
     AD1CON3bits.SAMC = 15; // how long the sampling should last
     AD1CON2bits.CHPS = 0; // how many channels you want to use
-    AD1CHS0bits.CH0SA = 5; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
+    AD1CHS0bits.CH0SB = 14; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
     //AD1CHS123bits.CH123SA = 2 ; // selects the inputs to channels 1, 2 and 3:  Select AN2 for CH1 +ve input
-    ANSELBbits.ANSB14 = 0; // Set the appropriate bits to 0 for analog input pins
-    TRISBbits.TRISB9 = 1;
+    ANSELBbits.ANSB14 = 1; // Set the appropriate bits to 0 for analog input pins
+    TRISBbits.TRISB9 = 0;
     LATBbits.LATB9 = 1;
-    AD1CON1bits.ADON = 1; // turn on ADC1     
+    AD1CON1bits.ADON = 1; // turn on ADC1
+    
+    // Check ansel and ch0sa
 }
 
 // Battery sensor init
