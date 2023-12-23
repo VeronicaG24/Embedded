@@ -266,11 +266,11 @@ int main() {
     ANSELA = ANSELB = ANSELC = ANSELD = ANSELE = ANSELG = 0x0000;
 
     initPins();
-    // initUART2();
+    initUART2();
     initADC1();
     initOCPWM();
 
-    // remapUARTPins();
+    remapUARTPins();
     remapOCPins();
     remapINTPins();
     
@@ -285,7 +285,7 @@ int main() {
     float value;
     double surge;
     double yaw_rate;
-    // char buff[16];
+    char buff[16];
 
     tmr_setup_period(TIMER1, 1);
 
@@ -302,11 +302,11 @@ int main() {
             float read_value = ADC1BUF0;
             float v = read_value / 1023.0 * 3.3; // Value in Volts
             value = 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
-            // sprintf(buff, "%f", value);
-            // for (int i = 0; i < strlen(buff); i++){
-            //    while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
-            //    U2TXREG = buff[i];
-            // }
+            sprintf(buff, "%f", value);
+            for (int i = 0; i < strlen(buff); i++){
+                while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
+                U2TXREG = buff[i];
+            }
             if (value > MINTH && value < MAXTH) {
                 LATBbits.LATB8 = 1;
                 OC1R += 500;
