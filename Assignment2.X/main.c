@@ -171,10 +171,9 @@ void initADC1() {
     AD1CON3bits.ADCS = 7; // Tad
     AD1CON1bits.ASAM = 0; // manual sampling
     AD1CON1bits.SSRC = 7; // automatic convertion
-    AD1CON3bits.SAMC = 15; // how long the sampling should last
+    AD1CON3bits.SAMC = 16; // how long the sampling should last
     AD1CON2bits.CHPS = 0; // how many channels you want to use
-    AD1CHS0bits.CH0SB = 14; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
-    //AD1CHS123bits.CH123SA = 2 ; // selects the inputs to channels 1, 2 and 3:  Select AN2 for CH1 +ve input
+    AD1CHS0bits.CH0SA = 14; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
     ANSELBbits.ANSB14 = 1; // Set the appropriate bits to 0 for analog input pins
     TRISBbits.TRISB9 = 0;
     LATBbits.LATB9 = 1;
@@ -302,25 +301,23 @@ int main() {
             float read_value = ADC1BUF0;
             float v = read_value / 1023.0 * 3.3; // Value in Volts
             value = 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
-            sprintf(buff, "%f", value);
+            sprintf(buff, "%.2f ", value);
             for (int i = 0; i < strlen(buff); i++){
                 while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
                 U2TXREG = buff[i];
             }
-            if (value > MINTH && value < MAXTH) {
-                LATBbits.LATB8 = 1;
+            /* if (value > MINTH && value < MAXTH) {
                 OC1R += 500;
                 OC3R += 500;
                 if (OC1R > 4000) OC1R = 4000;
                 if (OC3R > 4000) OC3R = 4000;
             }
             else {
-                LATFbits.LATF1 = 1;
                 OC1R -= 500;
                 OC3R -= 500;
                 if (OC1R < 0) OC1R = 0;
                 if (OC3R < 0) OC3R = 0;
-            }
+            }*/
 
             // LATBbits.LATB8 = 1;
             // LATFbits.LATF1 = 1;
