@@ -167,32 +167,32 @@ void remapUARTPins() {
 }
 
 // IR sensor init
-void initADC1() {
-    AD1CON3bits.ADCS = 7; // Tad
-    AD1CON1bits.ASAM = 0; // manual sampling
-    AD1CON1bits.SSRC = 7; // automatic convertion
-    AD1CON3bits.SAMC = 16; // how long the sampling should last
-    AD1CON2bits.CHPS = 0; // how many channels you want to use
-    AD1CHS0bits.CH0SA = 14; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
-    ANSELBbits.ANSB14 = 1; // Set the appropriate bits to 0 for analog input pins
-    TRISBbits.TRISB9 = 0;
-    LATBbits.LATB9 = 1;
-    AD1CON1bits.ADON = 1; // turn on ADC1
+void initADC1() {    
+    // IR Sensor analog configuratiom AN15
+    TRISBbits.TRISB15 = 1;
+    ANSELBbits.ANSB15 = 1;
+    // Battery sensing analog configuration AN11
+    TRISBbits.TRISB11 = 1;
+    ANSELBbits.ANSB11 = 1;
     
-    // Check ansel and ch0sa
-}
+    AD1CON3bits.ADCS = 14; // 14*T_CY
+    AD1CON1bits.ASAM = 1; // automatic sampling start
+    AD1CON1bits.SSRC = 7; // automatic conversion
+    AD1CON3bits.SAMC = 16; // sampling lasts 16 Tad
+    AD1CON2bits.CHPS = 0; // use CH0 2-channels sequential sampling mode
+    AD1CON1bits.SIMSAM = 0; // sequential sampling
 
-// Battery sensor init
-void initADC2() {
-    AD2CON3bits.ADCS = 7; // Tad
-    AD2CON1bits.ASAM = 0; // manual sampling
-    AD2CON1bits.SSRC = 7; // automatic convertion
-    AD2CON3bits.SAMC = 15; // how long the sampling should last
-    AD2CON2bits.CHPS = 0; // how many channels you want to use
-    AD2CHS0bits.CH0SA = 5; // selects the inputs to channel 0: Select AN5 for CH0 +ve input
-    //AD1CHS123bits.CH123SA = 2 ; // selects the inputs to channels 1, 2 and 3:  Select AN2 for CH1 +ve input
-    ANSELBbits.ANSB11 = 1; // Set the appropriate bits to 0 for analog input pins
-    AD2CON1bits.ADON = 1; // turn on ADC1   
+	// Scan mode specific configuration
+	AD1CON2bits.CSCNA = 1; // scan mode enabled
+    AD1CSSLbits.CSS11 = 1;   // scan for AN11 battery
+    AD1CSSLbits.CSS15 = 1;   // scan for AN15 ir sensor
+	AD1CON2bits.SMPI = 1; // N-1 channels
+
+    AD1CON1bits.ADON = 1; // turn on ADC
+
+    // IR distance sensor enable line
+    TRISAbits.TRISA3 = 0;
+    LATAbits.LATA3 = 1;
 }
 
 void initOCPWM() {
@@ -277,29 +277,23 @@ int main() {
     IEC0bits.T2IE = 1;
     IEC1bits.INT1IE = 1;
     
-    // Start sampling
-    AD1CON1bits.SAMP = 1;
-    while(!AD1CON1bits.DONE);
-    
-    float value;
-    double surge;
-    double yaw_rate;
+    double value, adc_battery, adc_ir;
+    double surge, yaw_rate;
     char buff[16];
 
     tmr_setup_period(TIMER1, 1);
 
     while(1) {
-        // While in wait for start...
         if (!start)
         {
             stopMotors();
         }
         else {
-            // Update PWM and read sensors at 1kHz
-            // Read from sensor
-            // value = computeDist(ADC1BUF0);
-            float read_value = ADC1BUF0;
-            float v = read_value / 1023.0 * 3.3; // Value in Volts
+            while (!AD1CON1bits.DONE);
+            adc_battery = ADC1BUF0;
+            adc_ir = ADC1BUF1;
+
+            double v = adc_ir / 1023.0 * 3.3; // Value in Volts
             value = 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
             sprintf(buff, "%.2f ", value);
             for (int i = 0; i < strlen(buff); i++){
