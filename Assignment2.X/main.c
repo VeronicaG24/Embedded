@@ -6,8 +6,10 @@
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define MINTH 2.0
-#define MAXTH 10.0
+#define MINTH 3
+#define MAXTH 7
+#define OC_MAX 4000
+#define INCR 500
 
 int start = 0;
 int startCount = 0;
@@ -215,6 +217,9 @@ void initOCPWM() {
     OC4CON1bits.OCTSEL = 7; // Peripheral clock
     OC4CON2bits.SYNCSEL = 0x1F; // No sync source
     OC4CON1bits.OCM = 6; // Edge-aligned PWM mode
+
+    // unsigned int ptper = ((FOSC / 2) / (10000 * 1)) - 1;
+    // PTPER = ptper;
 }
 
 void remapOCPins() {
@@ -239,14 +244,6 @@ void stopMotors() {
     OC4R = 0;
 }
 
-void forward() {
-    
-}
-
-void turn() {
-    
-}
-
 void blinkLed(int ms) {
     if (startCount == ms)
     {
@@ -259,6 +256,44 @@ void blinkLed(int ms) {
 double computeDist(double read_val) {
     double v = read_val / 1023.0 * 3.3; // Value in Volts
     return 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
+}
+
+void setPWM_Left(int pwm) {
+    if (pwm > 0) {
+        // Set PWM for forward motion
+        OC1R = pwm; // Assuming OC1R is mapped to RD2 for left wheel forward
+        OC2R = 0;   // Assuming OC2R is mapped to RD1 for left wheel backward
+    } else {
+        // Set PWM for backward motion
+        OC1R = 0;
+        OC2R = -pwm;
+    }
+}
+ 
+void setPWM_Right(int pwm) {
+    if (pwm > 0) {
+        // Set PWM for forward motion
+        OC3R = pwm; // Assuming OC3R is mapped to RD4 for right wheel forward
+        OC4R = 0;   // Assuming OC4R is mapped to RD3 for right wheel backward
+    } else {
+        // Set PWM for backward motion
+        OC3R = 0;
+        OC4R = -pwm;
+    }
+}
+
+void controlRobotBasedOnDistance(double sensedDistance) {
+    if (sensedDistance < MINTH) {
+        // Turn clockwise on the spot
+        setPWM_Left(-OC_MAX);  // Reverse left
+        setPWM_Right(OC_MAX);  // Forward right
+    } else if (sensedDistance > MAXTH) {
+        // Go forward
+        setPWM_Left(OC_MAX);   // Forward left
+        setPWM_Right(OC_MAX);  // Forward right
+    } else {
+        
+    }
 }
 
 int main() {
@@ -277,15 +312,14 @@ int main() {
     IEC0bits.T2IE = 1;
     IEC1bits.INT1IE = 1;
     
-    double value, adc_battery, adc_ir;
+    double v, dist, adc_battery, adc_ir;
     double surge, yaw_rate;
-    char buff[16];
+    // char buff[16];
 
     tmr_setup_period(TIMER1, 1);
 
     while(1) {
-        if (!start)
-        {
+        if (!start) {
             stopMotors();
         }
         else {
@@ -293,25 +327,16 @@ int main() {
             adc_battery = ADC1BUF0;
             adc_ir = ADC1BUF1;
 
-            double v = adc_ir / 1023.0 * 3.3; // Value in Volts
-            value = 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
-            sprintf(buff, "%.2f ", value);
-            for (int i = 0; i < strlen(buff); i++){
+            v = adc_ir / 1023.0 * 3.3; // Value in Volts
+            dist = 2.34 - 4.74 * v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
+
+            /*sprintf(buff, "%.2f ", value);
+            for (int i = 0; i < strlen(buff); i++) {
                 while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
                 U2TXREG = buff[i];
-            }
-            /* if (value > MINTH && value < MAXTH) {
-                OC1R += 500;
-                OC3R += 500;
-                if (OC1R > 4000) OC1R = 4000;
-                if (OC3R > 4000) OC3R = 4000;
-            }
-            else {
-                OC1R -= 500;
-                OC3R -= 500;
-                if (OC1R < 0) OC1R = 0;
-                if (OC3R < 0) OC3R = 0;
             }*/
+            
+            controlRobotBasedOnDistance(dist);
 
             // LATBbits.LATB8 = 1;
             // LATFbits.LATF1 = 1;
@@ -325,4 +350,52 @@ int main() {
     };
 
     return 0;
+}
+
+
+void controlProportional(double distance) {
+    double vel = OC_MAX / 8 + (OC_MAX / 2 - OC_MAX / 8) * (distance - MINTH) / (MAXTH - MINTH);
+    double yaw = 1 / 8 + (1 / 2 - 1 / 8) * (distance - MINTH) / (MAXTH - MINTH);
+
+    setPWM_Left(vel);
+    setPWM_Right(vel * yaw);
+}
+
+void controlRobot(double sensedDistance) {
+    double surgePercentage, yawRatePercentage;
+ 
+    // Example logic to calculate surge and yaw rate percentages
+    // surgePercentage = calculateSurgePercentage(sensedDistance);
+    // yawRatePercentage = calculateYawRatePercentage(sensedDistance);
+ 
+    // Convert percentages to PWM values
+    int surgePWM = (int)(surgePercentage / 100.0 * MAX_SPEED);
+    int yawRatePWM = (int)(yawRatePercentage / 100.0 * MAX_SPEED);
+ 
+    // Apply PWM to wheels for forward motion and rotation
+    setWheelSpeeds(surgePWM, yawRatePWM);
+}
+ 
+double calculateSurgePercentage(double distance) {
+    // Implement your logic to calculate surge percentage
+    // For example, slow down as the object gets closer
+    if (distance < MINTH) {
+        return (distance / MINTH) * 100.0; // Slows down as it approaches the object
+    }
+    return 100.0; // Full speed
+}
+ 
+double calculateYawRatePercentage(double distance) {
+    // Implement your logic to calculate yaw rate percentage
+    // For example, rotate more quickly when closer to an object
+    if (distance < MINTH) {
+        return 100.0; // Full speed rotation
+    }
+    return 0.0; // No rotation
+}
+ 
+void setWheelSpeeds(int surgePWM, int yawRatePWM) {
+    // Example logic to set wheel speeds based on surge and yaw rate
+    setPWM_Left(surgePWM + yawRatePWM);
+    setPWM_Right(surgePWM - yawRatePWM);
 }
