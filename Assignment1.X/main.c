@@ -410,13 +410,16 @@ int main(void) {
         algorithm();
         
         IEC1bits.U2RXIE = 0; // Disable UART2 interrupt
+
         while (U2STAbits.URXDA)
             Buff_Write(&circBuff, U2RXREG);
         IEC1bits.U2RXIE = 1; // Enable UART2 interrupt
 
         // If there are chars to read from the buffer
         while (checkAvailableBytes(&circBuff) > 0) {
-            if (circBuff.buff[circBuff.readIdx] == CR || circBuff.buff[circBuff.readIdx] == LF) {
+            char readChar = Buff_Read(&circBuff); // Safely read a character from the buffer
+
+            if (readChar == CR || readChar == LF) {
                 LCD_ClearFirstRow();
                 circBuff.readIdx = (circBuff.readIdx + 1) % BUFF_SIZE;
             }
