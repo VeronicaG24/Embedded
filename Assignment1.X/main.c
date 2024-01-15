@@ -215,7 +215,9 @@ void tmr_wait_period(int timer) {
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
     IFS0bits.INT0IF = 0; // reset interrupt flag
     btn_press = 0;
-    // start timer (20ms)
+    // Disable the interrupt to prevent immediate re-triggering
+    IEC0bits.INT0IE = 0;
+    // Start timer (20ms)
     tmr_setup_period(TIMER2, 20);
 }
 
@@ -223,6 +225,8 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT0Interrupt() {
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
     IFS1bits.INT1IF = 0; // reset interrupt flag
     btn_press = 1;
+    // Disable the interrupt to prevent immediate re-triggering
+    IEC1bits.INT1IE = 0;
     // start timer (20ms)
     tmr_setup_period(TIMER2, 20);
 }
@@ -231,6 +235,10 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     IFS0bits.T2IF = 0; // reset interrupt flag
 
+    // Re-enable button interrupts
+    IEC0bits.INT0IE = 1;
+    IEC1bits.INT1IE = 1;
+    
     // when timer elapsed read if the btn is still pressed, if not toggle
     int pinValue = 0;
 
@@ -249,6 +257,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
         } else {
             // If S6 button was pressed, reset the display and charCount
             LCD_ClearFirstRow();
+            rowCount = 0;
             LCD_ClearSecondRow();
             charCount = 0;
             UpdateSecondRow();
@@ -332,8 +341,6 @@ void LCD_ClearFirstRow() {
         LCD_WriteChar(' ');
 
     LCD_WriteChar(FIRST_ROW);
-
-    rowCount = 0;
 }
 
 // Function to clear the second row of the LCD
@@ -416,6 +423,7 @@ int main(void) {
         algorithm();
         
         IEC1bits.U2RXIE = 0; // Disable UART2 interrupt
+        globalInterruptEnabled = IEC1bits.U2RXIE;
 
         while (U2STAbits.URXDA)
             Buff_Write(&circBuff, U2RXREG);
@@ -427,17 +435,28 @@ int main(void) {
 
             if (readChar == CR || readChar == LF) {
                 LCD_ClearFirstRow();
+                // Disable interrupts before modifying shared variable
+                IEC1bits.U2RXIE = 0;
+                rowCount = 0;
+                IEC1bits.U2RXIE = globalInterruptEnabled; // Restore interrupt state
                 circBuff.readIdx = (circBuff.readIdx + 1) % BUFF_SIZE;
             }
             else if (rowCount == LINE_SIZE) {
                 LCD_ClearFirstRow();
+                // Disable interrupts before modifying shared variable
+                IEC1bits.U2RXIE = 0;
+                rowCount = 0;
+                IEC1bits.U2RXIE = globalInterruptEnabled; // Restore interrupt state
             }
             else {
                 LCD_WriteChar(FIRST_ROW + rowCount);
                 LCD_WriteChar(Buff_Read(&circBuff));
 
+                // Disable interrupts before modifying shared variable
+                IEC1bits.U2RXIE = 0;
                 rowCount++;
                 charCount++;
+                IEC1bits.U2RXIE = globalInterruptEnabled; // Restore interrupt state
 
                 // Update the second row with the character count
                 UpdateSecondRow();
