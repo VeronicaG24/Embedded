@@ -244,20 +244,26 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     
     if (pinValue) {
         if (!btn_press) {
-            // Send the current number of characters received via UART2
-            char buff[LINE_SIZE];
-            sprintf(buff, "%d", charCount); // Convert charCount to a string
-            // Send the buffer via UART2
-            for (int i = 0; i < strlen(buff); i++) {
-                while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
-                U2TXREG = buff[i];
-            }
-        }
-        else {
+            // If S5 button was pressed, send the current charCount over UART2
+            UART2write(charCount);
+        } else {
+            // If S6 button was pressed, reset the display and charCount
             LCD_ClearFirstRow();
             LCD_ClearSecondRow();
             charCount = 0;
             UpdateSecondRow();
+        }
+    }
+}
+
+void UART2write(int charRecvNum) {
+    char temp[12]; // Increase buffer size for larger numbers
+    snprintf(temp, sizeof(temp), "%d", charRecvNum); // Use snprintf for safer string formatting
+
+    for (int i = 0; i < strlen(temp); i++) {
+        if (temp[i] != '\0') {
+            while (!U2STAbits.TRMT); // Wait until the transmit buffer is empty
+            U2TXREG = temp[i]; // Transmit the character
         }
     }
 }
