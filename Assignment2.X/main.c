@@ -6,10 +6,11 @@
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define MINTH 3
-#define MAXTH 7
-#define OC_MAX 4000
+#define MINTH 0.1
+#define MAXTH 0.5
+#define OC_VAL 8000
 #define INCR 500
+#define OC_MAX 14400
 
 int start = 0;
 int startCount = 0;
@@ -171,7 +172,6 @@ void remapUARTPins() {
 // IR sensor init
 void initADC1() {    
     // IR Sensor analog configuratiom AN15
-    TRISBbits.TRISB15 = 1;
     ANSELBbits.ANSB15 = 1;
     // Battery sensing analog configuration AN11
     TRISBbits.TRISB11 = 1;
@@ -218,8 +218,10 @@ void initOCPWM() {
     OC4CON2bits.SYNCSEL = 0x1F; // No sync source
     OC4CON1bits.OCM = 6; // Edge-aligned PWM mode
 
-    // unsigned int ptper = ((FOSC / 2) / (10000 * 1)) - 1;
-    // PTPER = ptper;
+    OC1RS = OC_MAX;
+    OC2RS = OC_MAX;
+    OC3RS = OC_MAX;
+    OC4RS = OC_MAX;
 }
 
 void remapOCPins() {
@@ -285,14 +287,18 @@ void setPWM_Right(int pwm) {
 void controlRobotBasedOnDistance(double sensedDistance) {
     if (sensedDistance < MINTH) {
         // Turn clockwise on the spot
-        setPWM_Left(-OC_MAX);  // Reverse left
-        setPWM_Right(OC_MAX);  // Forward right
+        // setPWM_Left(-OC_VAL);  // Reverse left
+        // setPWM_Right(OC_VAL);  // Forward right
     } else if (sensedDistance > MAXTH) {
         // Go forward
-        setPWM_Left(OC_MAX);   // Forward left
-        setPWM_Right(OC_MAX);  // Forward right
+        // setPWM_Left(OC_VAL);   // Forward left
+        // setPWM_Right(OC_VAL);  // Forward right
     } else {
-        
+        /*double surge = OC_VAL / 8 + (OC_VAL / 2 - OC_VAL / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH);
+        double yaw = 1 / 8 + (1 / 2 - 1 / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH);
+
+        setPWM_Left(surge);
+        setPWM_Right(surge * yaw);*/
     }
 }
 
@@ -314,7 +320,7 @@ int main() {
     
     double v, dist, adc_battery, adc_ir;
     double surge, yaw_rate;
-    // char buff[16];
+    char buff[16];
 
     tmr_setup_period(TIMER1, 1);
 
@@ -330,11 +336,11 @@ int main() {
             v = adc_ir / 1023.0 * 3.3; // Value in Volts
             dist = 2.34 - 4.74 * v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
 
-            /*sprintf(buff, "%.2f ", value);
+            sprintf(buff, "%.2f ", dist);
             for (int i = 0; i < strlen(buff); i++) {
                 while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
                 U2TXREG = buff[i];
-            }*/
+            }
             
             controlRobotBasedOnDistance(dist);
 
@@ -352,16 +358,7 @@ int main() {
     return 0;
 }
 
-
-void controlProportional(double distance) {
-    double vel = OC_MAX / 8 + (OC_MAX / 2 - OC_MAX / 8) * (distance - MINTH) / (MAXTH - MINTH);
-    double yaw = 1 / 8 + (1 / 2 - 1 / 8) * (distance - MINTH) / (MAXTH - MINTH);
-
-    setPWM_Left(vel);
-    setPWM_Right(vel * yaw);
-}
-
-void controlRobot(double sensedDistance) {
+/* void controlRobot(double sensedDistance) {
     double surgePercentage, yawRatePercentage;
  
     // Example logic to calculate surge and yaw rate percentages
@@ -374,28 +371,4 @@ void controlRobot(double sensedDistance) {
  
     // Apply PWM to wheels for forward motion and rotation
     setWheelSpeeds(surgePWM, yawRatePWM);
-}
- 
-double calculateSurgePercentage(double distance) {
-    // Implement your logic to calculate surge percentage
-    // For example, slow down as the object gets closer
-    if (distance < MINTH) {
-        return (distance / MINTH) * 100.0; // Slows down as it approaches the object
-    }
-    return 100.0; // Full speed
-}
- 
-double calculateYawRatePercentage(double distance) {
-    // Implement your logic to calculate yaw rate percentage
-    // For example, rotate more quickly when closer to an object
-    if (distance < MINTH) {
-        return 100.0; // Full speed rotation
-    }
-    return 0.0; // No rotation
-}
- 
-void setWheelSpeeds(int surgePWM, int yawRatePWM) {
-    // Example logic to set wheel speeds based on surge and yaw rate
-    setPWM_Left(surgePWM + yawRatePWM);
-    setPWM_Right(surgePWM - yawRatePWM);
-}
+} */
