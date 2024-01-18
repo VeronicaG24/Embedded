@@ -6,14 +6,14 @@
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define MINTH 0.1
-#define MAXTH 0.5
-#define OC_VAL 8000
+#define MINTH 0.25
+#define MAXTH 0.6
 #define INCR 500
-#define OC_MAX 14400
+#define OC_MAX 9000
 
 int start = 0;
 int startCount = 0;
+int blinkRightLight = 0;
 
 void tmr_setup_period(int timer, int ms) {
     int prescaler = 1;
@@ -172,6 +172,7 @@ void remapUARTPins() {
 // IR sensor init
 void initADC1() {    
     // IR Sensor analog configuratiom AN15
+    TRISBbits.TRISB15 = 1;
     ANSELBbits.ANSB15 = 1;
     // Battery sensing analog configuration AN11
     TRISBbits.TRISB11 = 1;
@@ -250,6 +251,14 @@ void blinkLed(int ms) {
     if (startCount == ms)
     {
         LATAbits.LATA0 = !LATAbits.LATA0;
+
+        if (!start) {
+            LATBbits.LATB8 = !LATBbits.LATB8;
+            LATFbits.LATF1 = !LATFbits.LATF1;
+        }
+        
+        if (blinkRightLight && start) LATFbits.LATF1 = !LATFbits.LATF1;
+
         startCount = 0;
     }
     startCount++;
@@ -263,45 +272,115 @@ double computeDist(double read_val) {
 void setPWM_Left(int pwm) {
     if (pwm > 0) {
         // Set PWM for forward motion
-        OC1R = pwm; // Assuming OC1R is mapped to RD2 for left wheel forward
-        OC2R = 0;   // Assuming OC2R is mapped to RD1 for left wheel backward
+        OC1R = 0;
+        OC2R = pwm;
     } else {
         // Set PWM for backward motion
-        OC1R = 0;
-        OC2R = -pwm;
+        OC1R = pwm;
+        OC2R = 0;
     }
 }
  
 void setPWM_Right(int pwm) {
     if (pwm > 0) {
         // Set PWM for forward motion
-        OC3R = pwm; // Assuming OC3R is mapped to RD4 for right wheel forward
-        OC4R = 0;   // Assuming OC4R is mapped to RD3 for right wheel backward
+        OC3R = 0;
+        OC4R = pwm;
     } else {
         // Set PWM for backward motion
-        OC3R = 0;
-        OC4R = -pwm;
+        OC3R = pwm;
+        OC4R = 0;
     }
 }
 
-void controlRobotBasedOnDistance(double sensedDistance) {
+double computeSurge(double dist) {
+    double surge = 0;
+    
+    if (dist < MINTH) surge = 0;
+    else if (dist > MAXTH) surge = 0.8;
+    else {
+        surge = OC_MAX / 4 + (OC_MAX - OC_MAX / 4) * (dist - MINTH) / (MAXTH - MINTH);
+        surge = surge / OC_MAX;
+    }
+
+    return surge;
+}
+
+double computeYaw(double dist) {
+    double yaw_rate = 0;
+    
+    if (dist < MINTH) yaw_rate = 0.8;
+    else if (dist > MAXTH) yaw_rate = 0;
+    else {
+        yaw_rate = OC_MAX * (1.0 / 4 + (1.0 - 1.0 / 4) * (dist - MINTH) / (MAXTH - MINTH));
+        yaw_rate = yaw_rate / OC_MAX;
+    }
+
+    return yaw_rate;
+}
+
+/* void controlRobotBasedOnDistance(double sensedDistance) {
     if (sensedDistance < MINTH) {
-        // Turn clockwise on the spot
-        // setPWM_Left(-OC_VAL);  // Reverse left
-        // setPWM_Right(OC_VAL);  // Forward right
-    } else if (sensedDistance > MAXTH) {
-        // Go forward
-        // setPWM_Left(OC_VAL);   // Forward left
-        // setPWM_Right(OC_VAL);  // Forward right
-    } else {
-        /*double surge = OC_VAL / 8 + (OC_VAL / 2 - OC_VAL / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH);
-        double yaw = 1 / 8 + (1 / 2 - 1 / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH);
+        surge = 0;
+        yaw = 0.4 * OC_VAL;
 
-        setPWM_Left(surge);
-        setPWM_Right(surge * yaw);*/
+        // Turn clockwise on the spot
+        setPWM_Left(surge-yaw);  // Reverse left
+        setPWM_Right(surge+yaw);  // Forward right
+        
+    } else if (sensedDistance > MAXTH) {
+        surge = -0.6 * OC_VAL;
+        yaw = 0;
+        // Go forward
+        setPWM_Left(surge-yaw);   // Forward left
+        setPWM_Right(surge+yaw);  // Forward right
+    } else {
+        surge = OC_VAL / 8 + (OC_VAL / 2 - OC_VAL / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH);
+        surge = -surge;
+        yaw = OC_VAL *(1.0 / 8 + (1.0 / 2 - 1.0 / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH));
+        // modificare sopra
+        setPWM_Left(2*(surge-yaw)); 
+        setPWM_Right(4*(surge+yaw-1000));
+    }
+} */
+
+void printUART(double value, char* buff) {
+    sprintf(buff, "%.2f ", value);
+    for (int i = 0; i < strlen(buff); i++) {
+        while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
+        U2TXREG = buff[i];
     }
 }
 
+void checkLights(double surge, double yaw_rate) {
+    if (surge > 0.5) {
+        LATAbits.LATA7 = 1;
+        LATFbits.LATF0 = 0;
+        LATGbits.LATG1 = 0;
+    }
+    else {
+        LATAbits.LATA7 = 0;
+        LATFbits.LATF0 = 1;
+        LATGbits.LATG1 = 1;
+    }
+    
+    if (yaw_rate < 0.15) {
+        LATBbits.LATB8 = 0;
+        blinkRightLight = 1;
+    }
+    else {
+        blinkRightLight = 0;
+        LATBbits.LATB8 = 0;
+        LATFbits.LATF1 = 0;
+    }
+}
+
+void turnOffLights() {
+    LATFbits.LATF0 = 0;
+    LATGbits.LATG1 = 0;
+    LATAbits.LATA7 = 0;
+}
+        
 int main() {
     ANSELA = ANSELB = ANSELC = ANSELD = ANSELE = ANSELG = 0x0000;
 
@@ -326,29 +405,24 @@ int main() {
 
     while(1) {
         if (!start) {
+            turnOffLights();
             stopMotors();
         }
         else {
             while (!AD1CON1bits.DONE);
             adc_battery = ADC1BUF0;
             adc_ir = ADC1BUF1;
+            dist = computeDist(adc_ir);
 
-            v = adc_ir / 1023.0 * 3.3; // Value in Volts
-            dist = 2.34 - 4.74 * v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
+            printUART(dist, buff);
 
-            sprintf(buff, "%.2f ", dist);
-            for (int i = 0; i < strlen(buff); i++) {
-                while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
-                U2TXREG = buff[i];
-            }
+            surge = computeSurge(dist);
+            yaw_rate = computeYaw(dist);
             
-            controlRobotBasedOnDistance(dist);
+            checkLights(surge, yaw_rate);
 
-            // LATBbits.LATB8 = 1;
-            // LATFbits.LATF1 = 1;
-            // LATFbits.LATF0 = 1;
-            // LATGbits.LATG1 = 1;
-            // LATAbits.LATA7 = 1;
+            setPWM_Left(OC_MAX * (surge+yaw_rate));
+            setPWM_Right(OC_MAX * (surge-yaw_rate));
         }
 
         blinkLed(1000);
@@ -358,17 +432,8 @@ int main() {
     return 0;
 }
 
-/* void controlRobot(double sensedDistance) {
-    double surgePercentage, yawRatePercentage;
- 
-    // Example logic to calculate surge and yaw rate percentages
-    // surgePercentage = calculateSurgePercentage(sensedDistance);
-    // yawRatePercentage = calculateYawRatePercentage(sensedDistance);
- 
-    // Convert percentages to PWM values
-    int surgePWM = (int)(surgePercentage / 100.0 * MAX_SPEED);
-    int yawRatePWM = (int)(yawRatePercentage / 100.0 * MAX_SPEED);
- 
-    // Apply PWM to wheels for forward motion and rotation
-    setWheelSpeeds(surgePWM, yawRatePWM);
-} */
+// LATBbits.LATB8 = 1;
+// LATFbits.LATF1 = 1;
+// LATFbits.LATF0 = 1;
+// LATGbits.LATG1 = 1;
+// LATAbits.LATA7 = 1;
