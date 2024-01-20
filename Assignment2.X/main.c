@@ -1,18 +1,37 @@
+// Assignment 2 - Embedded Systems
+// Group 6
+// Gabriele Nicchiarelli - S4822677
+// Veronica Gavagna - S5487110
+// Andrea Bolla - S4482930
+
 #include <xc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+
+#include "parser.h"
 
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define MINTH 0.25
-#define MAXTH 0.6
-#define INCR 500
-#define OC_MAX 9000
+#define MINTH 0.2
+#define MAXTH 0.5
+#define OC_MAX 14000.0
+#define BUFF_SIZE 16
+
+// Circular buffer structure
+typedef struct {
+    char buff[BUFF_SIZE];
+    int readIdx;
+    int writeIdx;
+} CircBuff;
+
+CircBuff circBuff;
 
 int start = 0;
 int startCount = 0;
+int countTx = 0;
 int blinkRightLight = 0;
 
 void tmr_setup_period(int timer, int ms) {
@@ -147,6 +166,88 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     }
 }
 
+// UART2 interrupt
+void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
+    IFS1bits.U2RXIF = 0;  // Reset del flag di interrupt
+
+    while (U2STAbits.URXDA)
+        buffWrite(&circBuff, U2RXREG);
+}
+
+int parse_byte(parser_state* ps, char byte) {
+    switch (ps->state) {
+        case STATE_DOLLAR:
+            if (byte == '$') {
+                ps->state = STATE_TYPE;
+                ps->index_type = 0;
+            }
+            break;
+        case STATE_TYPE:
+            if (byte == ',') {
+                ps->state = STATE_PAYLOAD;
+                ps->msg_type[ps->index_type] = '\0';
+                ps->index_payload = 0; // initialize properly the index
+            } else if (ps->index_type == 6) { // error! 
+                ps->state = STATE_DOLLAR;
+                ps->index_type = 0;
+			} else if (byte == '*') {
+				ps->state = STATE_DOLLAR; // get ready for a new message
+                ps->msg_type[ps->index_type] = '\0';
+				ps->msg_payload[0] = '\0'; // no payload
+                return NEW_MESSAGE;
+            } else {
+                ps->msg_type[ps->index_type] = byte; // ok!
+                ps->index_type++; // increment for the next time;
+            }
+            break;
+        case STATE_PAYLOAD:
+            if (byte == '*') {
+                ps->state = STATE_DOLLAR; // get ready for a new message
+                ps->msg_payload[ps->index_payload] = '\0';
+                return NEW_MESSAGE;
+            } else if (ps->index_payload == 100) { // error
+                ps->state = STATE_DOLLAR;
+                ps->index_payload = 0;
+            } else {
+                ps->msg_payload[ps->index_payload] = byte; // ok!
+                ps->index_payload++; // increment for the next time;
+            }
+            break;
+    }
+    return NO_MESSAGE;
+}
+
+// Function to initialize the circular buffer
+void buffInit(CircBuff* buff) {
+    buff->readIdx = 0;
+    buff->writeIdx = 0;
+}
+
+// Function to write a char to the circular buffer
+void buffWrite(CircBuff *buff, char data) {
+    // If writeIdx - readIdx == 1, then thorugh away the oldest character
+    if ((buff->readIdx % BUFF_SIZE) - (buff->writeIdx % BUFF_SIZE) <= 1 && buff->writeIdx < buff->readIdx)
+        buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
+
+    buff->buff[buff->writeIdx] = data;
+    buff->writeIdx = (buff->writeIdx + 1) % BUFF_SIZE;
+}
+
+// Function to read a char from the circular buffer
+char buffRead(CircBuff *buff) {
+    char data = buff->buff[buff->readIdx];
+    buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
+    return data;
+}
+
+// Function to check if there are characters to flush on the LCD
+int checkAvailableBytes(CircBuff* buff) {
+    if(buff->readIdx <= buff->writeIdx)
+        return buff->writeIdx - buff->readIdx;
+    else
+        return BUFF_SIZE - buff->readIdx + buff->writeIdx;
+}
+
 void initPins() {
     TRISAbits.TRISA0 = 0; // led A0 as output
     TRISEbits.TRISE8 = 1; // Btn E8 as input
@@ -265,11 +366,20 @@ void blinkLed(int ms) {
 }
 
 double computeDist(double read_val) {
-    double v = read_val / 1023.0 * 3.3; // Value in Volts
+    double v = read_val * 3.3 / 1024.0;
     return 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
 }
 
+double computeBattVolt(double read_val) {
+    const double R1 = 200.0, R2 = 100.0;
+
+    double v = read_val * 3.3 / 1024.0;
+    return v * (R1 + R2) / R2;
+}
+
 void setPWM_Left(int pwm) {
+    if (abs(pwm) < OC_MAX / 4) pwm = 3000;
+
     if (pwm > 0) {
         // Set PWM for forward motion
         OC1R = 0;
@@ -282,6 +392,8 @@ void setPWM_Left(int pwm) {
 }
  
 void setPWM_Right(int pwm) {
+    if (abs(pwm) < OC_MAX / 4) pwm = 3000;
+
     if (pwm > 0) {
         // Set PWM for forward motion
         OC3R = 0;
@@ -294,10 +406,10 @@ void setPWM_Right(int pwm) {
 }
 
 double computeSurge(double dist) {
-    double surge = 0;
+    double surge = 0.0;
     
-    if (dist < MINTH) surge = 0;
-    else if (dist > MAXTH) surge = 0.8;
+    if (dist < MINTH) surge = 0.0;
+    else if (dist > MAXTH) surge = 0.7;
     else {
         surge = OC_MAX / 4 + (OC_MAX - OC_MAX / 4) * (dist - MINTH) / (MAXTH - MINTH);
         surge = surge / OC_MAX;
@@ -307,10 +419,10 @@ double computeSurge(double dist) {
 }
 
 double computeYaw(double dist) {
-    double yaw_rate = 0;
+    double yaw_rate = 0.0;
     
-    if (dist < MINTH) yaw_rate = 0.8;
-    else if (dist > MAXTH) yaw_rate = 0;
+    if (dist < MINTH) yaw_rate = 0.5;
+    else if (dist > MAXTH) yaw_rate = 0.0;
     else {
         yaw_rate = OC_MAX * (1.0 / 4 + (1.0 - 1.0 / 4) * (dist - MINTH) / (MAXTH - MINTH));
         yaw_rate = yaw_rate / OC_MAX;
@@ -319,37 +431,39 @@ double computeYaw(double dist) {
     return yaw_rate;
 }
 
-/* void controlRobotBasedOnDistance(double sensedDistance) {
-    if (sensedDistance < MINTH) {
-        surge = 0;
-        yaw = 0.4 * OC_VAL;
+void sendDistUART(double value) {
+    char buff[16];
 
-        // Turn clockwise on the spot
-        setPWM_Left(surge-yaw);  // Reverse left
-        setPWM_Right(surge+yaw);  // Forward right
-        
-    } else if (sensedDistance > MAXTH) {
-        surge = -0.6 * OC_VAL;
-        yaw = 0;
-        // Go forward
-        setPWM_Left(surge-yaw);   // Forward left
-        setPWM_Right(surge+yaw);  // Forward right
-    } else {
-        surge = OC_VAL / 8 + (OC_VAL / 2 - OC_VAL / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH);
-        surge = -surge;
-        yaw = OC_VAL *(1.0 / 8 + (1.0 / 2 - 1.0 / 8) * (sensedDistance - MINTH) / (MAXTH - MINTH));
-        // modificare sopra
-        setPWM_Left(2*(surge-yaw)); 
-        setPWM_Right(4*(surge+yaw-1000));
+    if (countTx % 100 == 0) {
+        value *= 100;
+        sprintf(buff, "$MDIST,%d*\n", (int)value);
     }
-} */
 
-void printUART(double value, char* buff) {
-    sprintf(buff, "%.2f ", value);
-    for (int i = 0; i < strlen(buff); i++) {
-        while (!U2STAbits.TRMT); // Wait for UART2 transmit buffer to be empty
-        U2TXREG = buff[i];
+    for (int i = 0; i < strlen(buff); i++)
+        buffWrite(&circBuff, buff[i]);
+}
+
+void sendBattUART(double value) {
+    char buff[16];
+
+    if (countTx == 1000) {
+        sprintf(buff, "$MBATT,%.2f*\n", value);
+        countTx = 0;
     }
+
+    for (int i = 0; i < strlen(buff); i++)
+        buffWrite(&circBuff, buff[i]);
+}
+
+void sendDcsUART(double* values) {
+    char buff[16];
+
+    if (countTx % 100 == 0) {
+        sprintf(buff, "$MPWM,%d,%d,%d,%d*", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
+    }
+
+    for (int i = 0; i < strlen(buff); i++)
+        buffWrite(&circBuff, buff[i]);
 }
 
 void checkLights(double surge, double yaw_rate) {
@@ -396,44 +510,57 @@ int main() {
     // Enable interrupts
     IEC0bits.T2IE = 1;
     IEC1bits.INT1IE = 1;
-    
-    double v, dist, adc_battery, adc_ir;
-    double surge, yaw_rate;
-    char buff[16];
+    // IEC1bits.U2TXIE = 1;
+    IEC1bits.U2RXIE = 1;
+    U2STAbits.URXISEL = 3; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
+
+    // Init circular buffer
+    buffInit(&circBuff);
+
+    // Parser initialization
+    parser_state pstate;
+	pstate.state = STATE_DOLLAR;
+	pstate.index_type = 0; 
+	pstate.index_payload = 0;
+
+    double v, dist, batt_val, adc_batt, adc_ir, surge, yaw_rate;
+    // double dcs[4] = { 1.0, 2.0, 3.0, 4.0 };
 
     tmr_setup_period(TIMER1, 1);
 
     while(1) {
+        while (!AD1CON1bits.DONE);
+        adc_batt = ADC1BUF0;
+        adc_ir = ADC1BUF1;
+
+        dist = computeDist(adc_ir);
+        batt_val = computeBattVolt(adc_batt);
+
         if (!start) {
             turnOffLights();
             stopMotors();
         }
         else {
-            while (!AD1CON1bits.DONE);
-            adc_battery = ADC1BUF0;
-            adc_ir = ADC1BUF1;
-            dist = computeDist(adc_ir);
-
-            printUART(dist, buff);
-
             surge = computeSurge(dist);
             yaw_rate = computeYaw(dist);
-            
+
             checkLights(surge, yaw_rate);
 
             setPWM_Left(OC_MAX * (surge+yaw_rate));
             setPWM_Right(OC_MAX * (surge-yaw_rate));
         }
 
+        // sendDistUART(dist);
+        // sendBattUART(batt_val);
+        // sendDcsUART(dcs);
+        // while (!U2STAbits.TRMT);
+        //    U2TXREG = buffRead(&circBuff);
+        
         blinkLed(1000);
+        countTx++;
+
         tmr_wait_period(TIMER1);
     };
 
     return 0;
 }
-
-// LATBbits.LATB8 = 1;
-// LATFbits.LATF1 = 1;
-// LATFbits.LATF0 = 1;
-// LATGbits.LATG1 = 1;
-// LATAbits.LATA7 = 1;
