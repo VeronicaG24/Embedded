@@ -15,10 +15,15 @@
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define MINTH 0.2
-#define MAXTH 0.5
 #define OC_MAX 14000.0
-#define BUFF_SIZE 16
+#define BUFF_SIZE 104
+
+/* How to compute the circular buffer size:
+ * baud rate = 9600
+ * read time = 100ms
+ * bits transmitted = 1start + 1end + 8data = 10bits
+ * (9600bps*0.1s) / 10bits = 96 --> a little bit bigger: 104
+ */
 
 // Circular buffer structure
 typedef struct {
@@ -27,7 +32,10 @@ typedef struct {
     int writeIdx;
 } CircBuff;
 
-CircBuff circBuff;
+CircBuff circBuffTx;
+CircBuff circBuffRx;
+
+double minth = 0.2, maxth = 0.5;
 
 int start = 0;
 int startCount = 0;
@@ -168,10 +176,10 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
 
 // UART2 interrupt
 void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
-    IFS1bits.U2RXIF = 0;  // Reset del flag di interrupt
+    IFS1bits.U2RXIF = 0; // Reset del flag di interrupt
 
     while (U2STAbits.URXDA)
-        buffWrite(&circBuff, U2RXREG);
+        buffWrite(&circBuffRx, U2RXREG);
 }
 
 int parse_byte(parser_state* ps, char byte) {
@@ -242,7 +250,7 @@ char buffRead(CircBuff *buff) {
 
 // Function to check if there are characters to flush on the LCD
 int checkAvailableBytes(CircBuff* buff) {
-    if(buff->readIdx <= buff->writeIdx)
+    if (buff->readIdx <= buff->writeIdx)
         return buff->writeIdx - buff->readIdx;
     else
         return BUFF_SIZE - buff->readIdx + buff->writeIdx;
@@ -408,10 +416,10 @@ void setPWM_Right(int pwm) {
 double computeSurge(double dist) {
     double surge = 0.0;
     
-    if (dist < MINTH) surge = 0.0;
-    else if (dist > MAXTH) surge = 0.7;
+    if (dist < minth) surge = 0.0;
+    else if (dist > maxth) surge = 0.7;
     else {
-        surge = OC_MAX / 4 + (OC_MAX - OC_MAX / 4) * (dist - MINTH) / (MAXTH - MINTH);
+        surge = OC_MAX / 4 + (OC_MAX - OC_MAX / 4) * (dist - minth) / (maxth - minth);
         surge = surge / OC_MAX;
     }
 
@@ -421,10 +429,10 @@ double computeSurge(double dist) {
 double computeYaw(double dist) {
     double yaw_rate = 0.0;
     
-    if (dist < MINTH) yaw_rate = 0.5;
-    else if (dist > MAXTH) yaw_rate = 0.0;
+    if (dist < minth) yaw_rate = 0.5;
+    else if (dist > maxth) yaw_rate = 0.0;
     else {
-        yaw_rate = OC_MAX * (1.0 / 4 + (1.0 - 1.0 / 4) * (dist - MINTH) / (MAXTH - MINTH));
+        yaw_rate = OC_MAX * (1.0 / 4 + (1.0 - 1.0 / 4) * (dist - minth) / (maxth - minth));
         yaw_rate = yaw_rate / OC_MAX;
     }
 
@@ -437,10 +445,15 @@ void sendDistUART(double value) {
     if (countTx % 100 == 0) {
         value *= 100;
         sprintf(buff, "$MDIST,%d*\n", (int)value);
+        
+        for (int i = 0; i < strlen(buff); i++)
+            buffWrite(&circBuffTx, buff[i]);
+        
+        while (checkAvailableBytes(&circBuffTx) > 0) {
+            while (!U2STAbits.TRMT);
+                U2TXREG = buffRead(&circBuffTx);
+        }
     }
-
-    for (int i = 0; i < strlen(buff); i++)
-        buffWrite(&circBuff, buff[i]);
 }
 
 void sendBattUART(double value) {
@@ -449,21 +462,31 @@ void sendBattUART(double value) {
     if (countTx == 1000) {
         sprintf(buff, "$MBATT,%.2f*\n", value);
         countTx = 0;
-    }
 
-    for (int i = 0; i < strlen(buff); i++)
-        buffWrite(&circBuff, buff[i]);
+        for (int i = 0; i < strlen(buff); i++)
+            buffWrite(&circBuffTx, buff[i]);
+        
+        while (checkAvailableBytes(&circBuffTx) > 0) {
+            while (!U2STAbits.TRMT);
+                U2TXREG = buffRead(&circBuffTx);
+        }
+    }
 }
 
 void sendDcsUART(double* values) {
     char buff[16];
 
     if (countTx % 100 == 0) {
-        sprintf(buff, "$MPWM,%d,%d,%d,%d*", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
-    }
+        sprintf(buff, "$MPWM,%d,%d,%d,%d*\n", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
 
-    for (int i = 0; i < strlen(buff); i++)
-        buffWrite(&circBuff, buff[i]);
+        for (int i = 0; i < strlen(buff); i++)
+            buffWrite(&circBuffTx, buff[i]);
+
+        while (checkAvailableBytes(&circBuffTx) > 0) {
+            while (!U2STAbits.TRMT);
+                U2TXREG = buffRead(&circBuffTx);
+        }
+    }
 }
 
 void checkLights(double surge, double yaw_rate) {
@@ -510,12 +533,12 @@ int main() {
     // Enable interrupts
     IEC0bits.T2IE = 1;
     IEC1bits.INT1IE = 1;
-    // IEC1bits.U2TXIE = 1;
     IEC1bits.U2RXIE = 1;
     U2STAbits.URXISEL = 3; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
 
     // Init circular buffer
-    buffInit(&circBuff);
+    buffInit(&circBuffTx);
+    buffInit(&circBuffRx);
 
     // Parser initialization
     parser_state pstate;
@@ -524,7 +547,7 @@ int main() {
 	pstate.index_payload = 0;
 
     double v, dist, batt_val, adc_batt, adc_ir, surge, yaw_rate;
-    // double dcs[4] = { 1.0, 2.0, 3.0, 4.0 };
+    double dcs[4] = { 1.0, 2.0, 3.0, 4.0 };
 
     tmr_setup_period(TIMER1, 1);
 
@@ -550,12 +573,17 @@ int main() {
             setPWM_Right(OC_MAX * (surge-yaw_rate));
         }
 
-        // sendDistUART(dist);
-        // sendBattUART(batt_val);
-        // sendDcsUART(dcs);
-        // while (!U2STAbits.TRMT);
-        //    U2TXREG = buffRead(&circBuff);
+        sendDistUART(dist);
+        sendBattUART(batt_val);
+        sendDcsUART(dcs);
         
+        while (checkAvailableBytes(&circBuffRx) > 0) {
+            parse_byte(&pstate, buffRead(&circBuffRx));
+            if (pstate->msg_type) {
+                
+            }
+        }
+
         blinkLed(1000);
         countTx++;
 
