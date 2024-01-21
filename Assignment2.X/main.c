@@ -225,6 +225,44 @@ int parse_byte(parser_state* ps, char byte) {
     return NO_MESSAGE;
 }
 
+int extract_integer(const char* str) {
+    int i = 0, number = 0, sign = 1;
+
+    if (str[i] == '-') {
+        sign = -1;  
+        i++;
+    }
+    else if (str[i] == '+') {
+        sign = 1;
+        i++;
+    }
+
+    while (str[i] != ',' && str[i] != '\0') {
+        number *= 10; // multiply the current number by 10;
+        number += str[i] - '0'; // converting character to decimal number
+        i++;
+    }
+
+    // convert from cm to m
+    number /= 100;
+    
+    return sign*number;
+}
+
+int next_value(const char* msg, int i) {
+    while (msg[i] != ',' && msg[i] != '\0') i++;
+    if (msg[i] == ',') i++;
+    return i;
+}
+
+void parse_pcth(const char* msg, double* minth, double* maxth) {
+    int i = 0;
+
+    *minth = extract_integer(msg);
+    i = next_value(msg, i);
+    *maxth = extract_integer(msg+i);
+}
+
 // Function to initialize the circular buffer
 void buffInit(CircBuff* buff) {
     buff->readIdx = 0;
@@ -548,6 +586,7 @@ int main() {
 
     double v, dist, batt_val, adc_batt, adc_ir, surge, yaw_rate;
     double dcs[4] = { 1.0, 2.0, 3.0, 4.0 };
+    int ret;
 
     tmr_setup_period(TIMER1, 1);
 
@@ -578,9 +617,10 @@ int main() {
         sendDcsUART(dcs);
         
         while (checkAvailableBytes(&circBuffRx) > 0) {
-            parse_byte(&pstate, buffRead(&circBuffRx));
-            if (pstate->msg_type) {
-                
+            ret = parse_byte(&pstate, buffRead(&circBuffRx));
+            if (ret == NEW_MESSAGE) {
+                if (strcmp(pstate.msg_type, "PCTH") == 0)
+                    parse_pcth(pstate.msg_payload, &minth, &maxth);
             }
         }
 
