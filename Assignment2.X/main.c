@@ -4,6 +4,13 @@
 // Veronica Gavagna - S5487110
 // Andrea Bolla - S4482930
 
+
+/* TODO:
+ * Duty cycle calculation
+ * Compute correct buffer sizes
+ * Fix interrupt handling
+*/
+
 #include <xc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +22,7 @@
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define OC_MAX 14000.0
+#define OC_MAX 14400.0
 #define BUFF_SIZE 104
 
 /* How to compute the circular buffer size:
@@ -23,6 +30,10 @@
  * read time = 100ms
  * bits transmitted = 1start + 1end + 8data = 10bits
  * (9600bps*0.1s) / 10bits = 96 --> a little bit bigger: 104
+ */
+
+/* How to compute the duty cylce:
+ * 
  */
 
 // Circular buffer structure
@@ -34,8 +45,6 @@ typedef struct {
 
 CircBuff circBuffTx;
 CircBuff circBuffRx;
-
-double minth = 0.2, maxth = 0.5;
 
 int start = 0;
 int startCount = 0;
@@ -164,13 +173,13 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     IFS0bits.T2IF = 0; // reset interrupt flag
 
-    int pinValue = 0;
-    pinValue = PORTEbits.RE8;
+    int pinValue = PORTEbits.RE8;
 
     T2CONbits.TON = 0; // stop T2
     if (!pinValue) {
         start = !start;
         startCount = 0;
+        turnOffLights();
     }
 }
 
@@ -178,8 +187,7 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
 void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
     IFS1bits.U2RXIF = 0; // Reset del flag di interrupt
 
-    while (U2STAbits.URXDA)
-        buffWrite(&circBuffRx, U2RXREG);
+    buffWrite(&circBuffRx, U2RXREG);
 }
 
 int parse_byte(parser_state* ps, char byte) {
@@ -226,7 +234,7 @@ int parse_byte(parser_state* ps, char byte) {
 }
 
 int extract_integer(const char* str) {
-    int i = 0, number = 0, sign = 1;
+    int i = 0, sign = 1, number = 0;
 
     if (str[i] == '-') {
         sign = -1;  
@@ -242,9 +250,6 @@ int extract_integer(const char* str) {
         number += str[i] - '0'; // converting character to decimal number
         i++;
     }
-
-    // convert from cm to m
-    number /= 100;
     
     return sign*number;
 }
@@ -256,11 +261,15 @@ int next_value(const char* msg, int i) {
 }
 
 void parse_pcth(const char* msg, double* minth, double* maxth) {
-    int i = 0;
+    int i = 0, minCM, maxCM;
 
-    *minth = extract_integer(msg);
+    minCM = extract_integer(msg);
     i = next_value(msg, i);
-    *maxth = extract_integer(msg+i);
+    maxCM = extract_integer(msg+i);
+
+    // Convert from CM to M
+    *minth = minCM / 100;
+    *maxth = maxCM / 100;
 }
 
 // Function to initialize the circular buffer
@@ -316,16 +325,15 @@ void remapUARTPins() {
     RPINR19bits.U2RXR = 0x4B;
 }
 
-// IR sensor init
 void initADC1() {    
-    // IR Sensor analog configuratiom AN15
+    // IR sensor analog configuration AN15
     TRISBbits.TRISB15 = 1;
     ANSELBbits.ANSB15 = 1;
     // Battery sensing analog configuration AN11
     TRISBbits.TRISB11 = 1;
     ANSELBbits.ANSB11 = 1;
-    
-    AD1CON3bits.ADCS = 14; // 14*T_CY
+
+    AD1CON3bits.ADCS = 14; // 14*Tcy
     AD1CON1bits.ASAM = 1; // automatic sampling start
     AD1CON1bits.SSRC = 7; // automatic conversion
     AD1CON3bits.SAMC = 16; // sampling lasts 16 Tad
@@ -334,8 +342,8 @@ void initADC1() {
 
 	// Scan mode specific configuration
 	AD1CON2bits.CSCNA = 1; // scan mode enabled
-    AD1CSSLbits.CSS11 = 1;   // scan for AN11 battery
-    AD1CSSLbits.CSS15 = 1;   // scan for AN15 ir sensor
+    AD1CSSLbits.CSS11 = 1; // scan for AN11 battery
+    AD1CSSLbits.CSS15 = 1; // scan for AN15 ir sensor
 	AD1CON2bits.SMPI = 1; // N-1 channels
 
     AD1CON1bits.ADON = 1; // turn on ADC
@@ -352,19 +360,19 @@ void initOCPWM() {
     OC1CON1bits.OCM = 6; // Edge-aligned PWM mode
     
     // OC2
-    OC2CON1bits.OCTSEL = 7; // Peripheral clock
-    OC2CON2bits.SYNCSEL = 0x1F; // No sync source
-    OC2CON1bits.OCM = 6; // Edge-aligned PWM mode
+    OC2CON1bits.OCTSEL = 7;
+    OC2CON2bits.SYNCSEL = 0x1F;
+    OC2CON1bits.OCM = 6;
 
     // OC3
-    OC3CON1bits.OCTSEL = 7; // Peripheral clock
-    OC3CON2bits.SYNCSEL = 0x1F; // No sync source
-    OC3CON1bits.OCM = 6; // Edge-aligned PWM mode
+    OC3CON1bits.OCTSEL = 7;
+    OC3CON2bits.SYNCSEL = 0x1F;
+    OC3CON1bits.OCM = 6;
 
     // OC4
-    OC4CON1bits.OCTSEL = 7; // Peripheral clock
-    OC4CON2bits.SYNCSEL = 0x1F; // No sync source
-    OC4CON1bits.OCM = 6; // Edge-aligned PWM mode
+    OC4CON1bits.OCTSEL = 7;
+    OC4CON2bits.SYNCSEL = 0x1F;
+    OC4CON1bits.OCM = 6;
 
     OC1RS = OC_MAX;
     OC2RS = OC_MAX;
@@ -394,17 +402,17 @@ void stopMotors() {
     OC4R = 0;
 }
 
-void blinkLed(int ms) {
-    if (startCount == ms)
-    {
+void blinkLights(const int ms) {
+    if (startCount == ms) {
         LATAbits.LATA0 = !LATAbits.LATA0;
 
         if (!start) {
             LATBbits.LATB8 = !LATBbits.LATB8;
             LATFbits.LATF1 = !LATFbits.LATF1;
         }
-        
-        if (blinkRightLight && start) LATFbits.LATF1 = !LATFbits.LATF1;
+
+        if (blinkRightLight && start)
+            LATFbits.LATF1 = !LATFbits.LATF1;
 
         startCount = 0;
     }
@@ -418,40 +426,46 @@ double computeDist(double read_val) {
 
 double computeBattVolt(double read_val) {
     const double R1 = 200.0, R2 = 100.0;
-
     double v = read_val * 3.3 / 1024.0;
     return v * (R1 + R2) / R2;
 }
 
 void setPWM_Left(int pwm) {
-    if (abs(pwm) < OC_MAX / 4) pwm = 3000;
-
     if (pwm > 0) {
-        // Set PWM for forward motion
+        if (pwm < OC_MAX / 4) pwm = OC_MAX / 4;
+
+        // Forward motion
         OC1R = 0;
         OC2R = pwm;
-    } else {
-        // Set PWM for backward motion
+    }
+    else {
+        if (pwm > -OC_MAX / 4) pwm = -OC_MAX / 4;
+
+        // Backward motion
         OC1R = pwm;
         OC2R = 0;
     }
 }
  
 void setPWM_Right(int pwm) {
-    if (abs(pwm) < OC_MAX / 4) pwm = 3000;
 
     if (pwm > 0) {
-        // Set PWM for forward motion
+        if (pwm < OC_MAX / 4) pwm = OC_MAX / 4;
+
+        // Forward motion
         OC3R = 0;
         OC4R = pwm;
-    } else {
-        // Set PWM for backward motion
+    }
+    else {
+        if (pwm > -OC_MAX / 4) pwm = -OC_MAX / 4;
+
+        // Backward motion
         OC3R = pwm;
         OC4R = 0;
     }
 }
 
-double computeSurge(double dist) {
+double computeSurge(const double dist, const double minth, const double maxth) {
     double surge = 0.0;
     
     if (dist < minth) surge = 0.0;
@@ -464,7 +478,7 @@ double computeSurge(double dist) {
     return surge;
 }
 
-double computeYaw(double dist) {
+double computeYaw(const double dist, const double minth, const double maxth) {
     double yaw_rate = 0.0;
     
     if (dist < minth) yaw_rate = 0.5;
@@ -483,12 +497,12 @@ void sendDistUART(double value) {
     if (countTx % 100 == 0) {
         value *= 100;
         sprintf(buff, "$MDIST,%d*\n", (int)value);
-        
+
         for (int i = 0; i < strlen(buff); i++)
             buffWrite(&circBuffTx, buff[i]);
-        
+
         while (checkAvailableBytes(&circBuffTx) > 0) {
-            while (!U2STAbits.TRMT);
+            while (U2STAbits.UTXBF);
                 U2TXREG = buffRead(&circBuffTx);
         }
     }
@@ -505,7 +519,7 @@ void sendBattUART(double value) {
             buffWrite(&circBuffTx, buff[i]);
         
         while (checkAvailableBytes(&circBuffTx) > 0) {
-            while (!U2STAbits.TRMT);
+            while (U2STAbits.UTXBF);
                 U2TXREG = buffRead(&circBuffTx);
         }
     }
@@ -514,6 +528,11 @@ void sendBattUART(double value) {
 void sendDcsUART(double* values) {
     char buff[16];
 
+    // Compute duty cycles
+    for (int i = 0; i < 4; i++) {
+        values[i] = values[i] * 100 / OC_MAX;
+    }
+
     if (countTx % 100 == 0) {
         sprintf(buff, "$MPWM,%d,%d,%d,%d*\n", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
 
@@ -521,13 +540,13 @@ void sendDcsUART(double* values) {
             buffWrite(&circBuffTx, buff[i]);
 
         while (checkAvailableBytes(&circBuffTx) > 0) {
-            while (!U2STAbits.TRMT);
+            while (U2STAbits.UTXBF);
                 U2TXREG = buffRead(&circBuffTx);
         }
     }
 }
 
-void checkLights(double surge, double yaw_rate) {
+void checkLights(const double surge, const double yaw_rate) {
     if (surge > 0.5) {
         LATAbits.LATA7 = 1;
         LATFbits.LATF0 = 0;
@@ -551,11 +570,14 @@ void checkLights(double surge, double yaw_rate) {
 }
 
 void turnOffLights() {
+    LATAbits.LATA0 = 0;
+    LATBbits.LATB8 = 0;
+    LATFbits.LATF1 = 0;
     LATFbits.LATF0 = 0;
     LATGbits.LATG1 = 0;
     LATAbits.LATA7 = 0;
 }
-        
+
 int main() {
     ANSELA = ANSELB = ANSELC = ANSELD = ANSELE = ANSELG = 0x0000;
 
@@ -572,7 +594,7 @@ int main() {
     IEC0bits.T2IE = 1;
     IEC1bits.INT1IE = 1;
     IEC1bits.U2RXIE = 1;
-    U2STAbits.URXISEL = 3; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
+    U2STAbits.URXISEL = 1; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
 
     // Init circular buffer
     buffInit(&circBuffTx);
@@ -584,27 +606,24 @@ int main() {
 	pstate.index_type = 0; 
 	pstate.index_payload = 0;
 
-    double v, dist, batt_val, adc_batt, adc_ir, surge, yaw_rate;
-    double dcs[4] = { 1.0, 2.0, 3.0, 4.0 };
+    double minth = 0.2, maxth = 0.5;
+    double dist, batt_val, dcs[4] = { 1.0 };
+    double surge, yaw_rate;
     int ret;
 
     tmr_setup_period(TIMER1, 1);
 
     while(1) {
         while (!AD1CON1bits.DONE);
-        adc_batt = ADC1BUF0;
-        adc_ir = ADC1BUF1;
-
-        dist = computeDist(adc_ir);
-        batt_val = computeBattVolt(adc_batt);
+        dist = computeDist(ADC1BUF1);
+        batt_val = computeBattVolt(ADC1BUF0);
 
         if (!start) {
-            turnOffLights();
             stopMotors();
         }
         else {
-            surge = computeSurge(dist);
-            yaw_rate = computeYaw(dist);
+            surge = computeSurge(dist, minth, maxth);
+            yaw_rate = computeYaw(dist, minth, maxth);
 
             checkLights(surge, yaw_rate);
 
@@ -613,9 +632,10 @@ int main() {
         }
 
         sendDistUART(dist);
-        sendBattUART(batt_val);
         sendDcsUART(dcs);
+        sendBattUART(batt_val);
         
+        // IEC1bits.U2RXIE = 0;
         while (checkAvailableBytes(&circBuffRx) > 0) {
             ret = parse_byte(&pstate, buffRead(&circBuffRx));
             if (ret == NEW_MESSAGE) {
@@ -623,8 +643,9 @@ int main() {
                     parse_pcth(pstate.msg_payload, &minth, &maxth);
             }
         }
+        // IEC1bits.U2RXIE = 1;
 
-        blinkLed(1000);
+        blinkLights(1000);
         countTx++;
 
         tmr_wait_period(TIMER1);
