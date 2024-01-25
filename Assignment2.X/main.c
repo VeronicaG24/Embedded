@@ -4,13 +4,6 @@
 // Veronica Gavagna - S5487110
 // Andrea Bolla - S4482930
 
-
-/* TODO:
- * Duty cycle calculation
- * Compute correct buffer sizes
- * Fix interrupt handling
-*/
-
 #include <xc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,20 +16,9 @@
 #define TIMER2 2
 #define FOSC 144000000
 #define OC_MAX 14400.0
-#define BUFF_SIZE 104
+#define BUFF_SIZE 48
 
-/* How to compute the circular buffer size:
- * baud rate = 9600
- * read time = 100ms
- * bits transmitted = 1start + 1end + 8data = 10bits
- * (9600bps*0.1s) / 10bits = 96 --> a little bit bigger: 104
- */
-
-/* How to compute the duty cylce:
- * 
- */
-
-// Circular buffer structure
+// Circular buffer struct
 typedef struct {
     char buff[BUFF_SIZE];
     int readIdx;
@@ -46,10 +28,10 @@ typedef struct {
 CircBuff circBuffTx;
 CircBuff circBuffRx;
 
-int start = 0;
+int start = 0; // Flag for state toggle
 int startCount = 0;
 int countTx = 0;
-int blinkRightLight = 0;
+int blinkRightLight = 0; // Flag to enable right light blink
 
 void tmr_setup_period(int timer, int ms) {
     int prescaler = 1;
@@ -165,6 +147,7 @@ void tmr_wait_ms(int timer, int ms) {
 
 void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
     IFS1bits.INT1IF = 0; // reset interrupt flag
+    IEC1bits.INT1IE = 0;
 
     // start timer form 10ms
     tmr_setup_period(TIMER2, 10);
@@ -181,6 +164,8 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
         startCount = 0;
         turnOffLights();
     }
+
+    IEC1bits.INT1IE = 1;
 }
 
 // UART2 interrupt
@@ -314,7 +299,7 @@ void initPins() {
 }
 
 void initUART2() {
-    const int baund = 9600;
+    const long int baund = 38400L;
     U2BRG = (FOSC / 2) / (16L * baund) - 1;
     U2MODEbits.UARTEN = 1; // enable UART2
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
@@ -430,7 +415,7 @@ double computeBattVolt(double read_val) {
     return v * (R1 + R2) / R2;
 }
 
-void setPWM_Left(int pwm) {
+int setPWM_Left(int pwm) {
     if (pwm > 0) {
         if (pwm < OC_MAX / 4) pwm = OC_MAX / 4;
 
@@ -445,10 +430,10 @@ void setPWM_Left(int pwm) {
         OC1R = pwm;
         OC2R = 0;
     }
+    return pwm;
 }
  
-void setPWM_Right(int pwm) {
-
+int setPWM_Right(int pwm) {
     if (pwm > 0) {
         if (pwm < OC_MAX / 4) pwm = OC_MAX / 4;
 
@@ -463,6 +448,7 @@ void setPWM_Right(int pwm) {
         OC3R = pwm;
         OC4R = 0;
     }
+    return pwm;
 }
 
 double computeSurge(const double dist, const double minth, const double maxth) {
@@ -607,8 +593,9 @@ int main() {
 	pstate.index_payload = 0;
 
     double minth = 0.2, maxth = 0.5;
-    double dist, batt_val, dcs[4] = { 1.0 };
-    double surge, yaw_rate;
+    double dist, batt_val;
+    double ocrs[4] = { 0.0 };
+    double surge = 0.0, yaw_rate = 0.0;
     int ret;
 
     tmr_setup_period(TIMER1, 1);
@@ -620,22 +607,27 @@ int main() {
 
         if (!start) {
             stopMotors();
+            for (int i = 0; i < 4; i++) ocrs[i] = 0.0;
         }
         else {
             surge = computeSurge(dist, minth, maxth);
             yaw_rate = computeYaw(dist, minth, maxth);
 
+            IEC1bits.INT1IE = 0;
             checkLights(surge, yaw_rate);
+            IEC1bits.INT1IE = 1;
 
-            setPWM_Left(OC_MAX * (surge+yaw_rate));
-            setPWM_Right(OC_MAX * (surge-yaw_rate));
+            ocrs[0] = setPWM_Left(OC_MAX * (surge+yaw_rate));
+            ocrs[2] = setPWM_Right(OC_MAX * (surge-yaw_rate));
+            ocrs[1] = ocrs[0];
+            ocrs[3] = ocrs[2];
         }
 
         sendDistUART(dist);
-        sendDcsUART(dcs);
+        sendDcsUART(ocrs);
         sendBattUART(batt_val);
-        
-        // IEC1bits.U2RXIE = 0;
+
+        IEC1bits.U2RXIE = 0;
         while (checkAvailableBytes(&circBuffRx) > 0) {
             ret = parse_byte(&pstate, buffRead(&circBuffRx));
             if (ret == NEW_MESSAGE) {
@@ -643,9 +635,12 @@ int main() {
                     parse_pcth(pstate.msg_payload, &minth, &maxth);
             }
         }
-        // IEC1bits.U2RXIE = 1;
-
+        IEC1bits.U2RXIE = 1;
+        
+        IEC1bits.INT1IE = 0;
         blinkLights(1000);
+        IEC1bits.INT1IE = 1;
+
         countTx++;
 
         tmr_wait_period(TIMER1);
