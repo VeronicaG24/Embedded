@@ -168,7 +168,6 @@ void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
     IEC1bits.INT1IE = 1;
 }
 
-// UART2 interrupt
 void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
     IFS1bits.U2RXIF = 0; // Reset del flag di interrupt
 
@@ -218,6 +217,7 @@ int parse_byte(parser_state* ps, char byte) {
     return NO_MESSAGE;
 }
 
+// Extract integer value from a string
 int extract_integer(const char* str) {
     int i = 0, sign = 1, number = 0;
 
@@ -245,6 +245,7 @@ int next_value(const char* msg, int i) {
     return i;
 }
 
+// Recognize $PCTH,minth,maxth*
 void parse_pcth(const char* msg, double* minth, double* maxth) {
     int i = 0, minCM, maxCM;
 
@@ -280,7 +281,7 @@ char buffRead(CircBuff *buff) {
     return data;
 }
 
-// Function to check if there are characters to flush on the LCD
+// Function to check if there are characters to flush
 int checkAvailableBytes(CircBuff* buff) {
     if (buff->readIdx <= buff->writeIdx)
         return buff->writeIdx - buff->readIdx;
@@ -300,8 +301,9 @@ void initPins() {
 
 void initUART2() {
     const long int baund = 38400L;
+    // const int baund = 9600;
     U2BRG = (FOSC / 2) / (16L * baund) - 1;
-    U2MODEbits.UARTEN = 1; // enable UART2
+    U2MODEbits.UARTEN = 1;
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
 }
 
@@ -477,6 +479,7 @@ double computeYaw(const double dist, const double minth, const double maxth) {
     return yaw_rate;
 }
 
+// Send to UART distance information
 void sendDistUART(double value) {
     char buff[16];
 
@@ -494,6 +497,7 @@ void sendDistUART(double value) {
     }
 }
 
+// Send to UART battery information
 void sendBattUART(double value) {
     char buff[16];
 
@@ -511,13 +515,13 @@ void sendBattUART(double value) {
     }
 }
 
+// Send to UART duty cycle information
 void sendDcsUART(double* values) {
     char buff[16];
 
     // Compute duty cycles
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++)
         values[i] = values[i] * 100 / OC_MAX;
-    }
 
     if (countTx % 100 == 0) {
         sprintf(buff, "$MPWM,%d,%d,%d,%d*\n", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
@@ -532,6 +536,7 @@ void sendDcsUART(double* values) {
     }
 }
 
+// Command lights based on surge and yaw
 void checkLights(const double surge, const double yaw_rate) {
     if (surge > 0.5) {
         LATAbits.LATA7 = 1;
@@ -582,7 +587,7 @@ int main() {
     IEC1bits.U2RXIE = 1;
     U2STAbits.URXISEL = 1; // UART2 interrupt mode (1: every char received, 2: 3/4 char buffer, 3: full)
 
-    // Init circular buffer
+    // Init circular buffers
     buffInit(&circBuffTx);
     buffInit(&circBuffRx);
 
