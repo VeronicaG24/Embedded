@@ -16,7 +16,7 @@
 #define TIMER2 2
 #define FOSC 144000000
 #define OC_MAX 14400.0
-#define BUFF_SIZE 48
+#define BUFF_SIZE 24
 
 // Circular buffer struct
 typedef struct {
@@ -300,8 +300,7 @@ void initPins() {
 }
 
 void initUART2() {
-    const long int baund = 38400L;
-    // const int baund = 9600;
+    const int baund = 9600;
     U2BRG = (FOSC / 2) / (16L * baund) - 1;
     U2MODEbits.UARTEN = 1;
     U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
@@ -481,58 +480,43 @@ double computeYaw(const double dist, const double minth, const double maxth) {
 
 // Send to UART distance information
 void sendDistUART(double value) {
-    char buff[16];
+    char buff[12];
 
-    if (countTx % 100 == 0) {
+    if (countTx % 100 == 13) {
         value *= 100;
-        sprintf(buff, "$MDIST,%d*\n", (int)value);
+        sprintf(buff, "$MDIST,%d*", (int)value);
 
         for (int i = 0; i < strlen(buff); i++)
             buffWrite(&circBuffTx, buff[i]);
-
-        while (checkAvailableBytes(&circBuffTx) > 0) {
-            while (U2STAbits.UTXBF);
-                U2TXREG = buffRead(&circBuffTx);
-        }
     }
 }
 
 // Send to UART battery information
 void sendBattUART(double value) {
-    char buff[16];
+    char buff[13];
 
     if (countTx == 1000) {
-        sprintf(buff, "$MBATT,%.2f*\n", value);
+        sprintf(buff, "$MBATT,%.2f*", value);
         countTx = 0;
 
         for (int i = 0; i < strlen(buff); i++)
             buffWrite(&circBuffTx, buff[i]);
-        
-        while (checkAvailableBytes(&circBuffTx) > 0) {
-            while (U2STAbits.UTXBF);
-                U2TXREG = buffRead(&circBuffTx);
-        }
     }
 }
 
 // Send to UART duty cycle information
 void sendDcsUART(double* values) {
-    char buff[16];
+    char buff[23];
 
     // Compute duty cycles
     for (int i = 0; i < 4; i++)
         values[i] = values[i] * 100 / OC_MAX;
 
-    if (countTx % 100 == 0) {
-        sprintf(buff, "$MPWM,%d,%d,%d,%d*\n", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
+    if (countTx % 100 == 43) {
+        sprintf(buff, "$MPWM,%d,%d,%d,%d*", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
 
         for (int i = 0; i < strlen(buff); i++)
             buffWrite(&circBuffTx, buff[i]);
-
-        while (checkAvailableBytes(&circBuffTx) > 0) {
-            while (U2STAbits.UTXBF);
-                U2TXREG = buffRead(&circBuffTx);
-        }
     }
 }
 
@@ -631,6 +615,9 @@ int main() {
         sendDistUART(dist);
         sendDcsUART(ocrs);
         sendBattUART(batt_val);
+        
+        while (checkAvailableBytes(&circBuffTx) > 0 && !U2STAbits.UTXBF)
+            U2TXREG = buffRead(&circBuffTx);
 
         IEC1bits.U2RXIE = 0;
         while (checkAvailableBytes(&circBuffRx) > 0) {
