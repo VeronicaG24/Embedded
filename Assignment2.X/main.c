@@ -15,22 +15,20 @@
 #define TIMER1 1
 #define TIMER2 2
 #define FOSC 144000000
-#define OC_MAX 14400.0
-#define BUFF_SIZE 24
+#define OC_MAX 14400
+#define SIZE 24 // Dimension of circular buffers
 
 // Circular buffer struct
 typedef struct {
-    char buff[BUFF_SIZE];
+    char buff[SIZE];
     int readIdx;
     int writeIdx;
 } CircBuff;
 
-CircBuff circBuffTx;
-CircBuff circBuffRx;
+CircBuff circBuffTx, circBuffRx;
 
 int start = 0; // Flag for state toggle
-int startCount = 0;
-int countTx = 0;
+int blinkCount = 0, txCount = 0; // Counters
 int blinkRightLight = 0; // Flag to enable right light blink
 
 void tmr_setup_period(int timer, int ms) {
@@ -86,94 +84,7 @@ void tmr_wait_period(int timer) {
     }
 }
 
-void tmr_setup_ms(int timer) {
-    switch (timer) {
-        case TIMER1: {
-            TMR1 = 0; // reset T1 counter
-            IFS0bits.T1IF = 0; // reset T1 flag
-            T1CONbits.TON = 1; // start T1
-        }
-        break;
-        
-        case TIMER2: {
-            TMR2 = 0; // reset T2 counter
-            IFS0bits.T2IF = 0; // reset T2 flag
-            T2CONbits.TON = 1; // start T2
-        }
-        break;
-    }
-}
-
-void tmr_wait_ms(int timer, int ms) {
-    int prescaler = 1;
-    long fcy = (FOSC / 2) * (ms / 1000.0);
-    long fcy_new = fcy;
-
-    if (fcy > 65535) {
-        fcy_new = fcy / 8;
-        prescaler = 1; // prescaler 1:8
-    }
-    if (fcy_new > 65535) {
-        fcy_new = fcy / 64;
-        prescaler = 2; // prescaler 1:64
-    }
-    if (fcy_new > 65535) {
-        fcy_new = fcy / 256;
-        prescaler = 3; // prescaler 1:256
-    }
-
-    switch (timer) {
-        case TIMER1: {
-            T1CONbits.TCKPS = prescaler;
-            PR1 = fcy_new;
-
-            // wait...
-            while(!IFS0bits.T1IF);
-            IFS0bits.T1IF = 0;
-        }
-        break;
-
-        case TIMER2: {
-            T2CONbits.TCKPS = prescaler;
-            PR2 = fcy_new;
-
-            // wait...
-            while(!IFS0bits.T2IF);
-            IFS0bits.T2IF = 0;
-        }
-        break;
-    }
-}
-
-void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
-    IFS1bits.INT1IF = 0; // reset interrupt flag
-    IEC1bits.INT1IE = 0;
-
-    // start timer form 10ms
-    tmr_setup_period(TIMER2, 10);
-}
-
-void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
-    IFS0bits.T2IF = 0; // reset interrupt flag
-
-    int pinValue = PORTEbits.RE8;
-
-    T2CONbits.TON = 0; // stop T2
-    if (!pinValue) {
-        start = !start;
-        startCount = 0;
-        turnOffLights();
-    }
-
-    IEC1bits.INT1IE = 1;
-}
-
-void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
-    IFS1bits.U2RXIF = 0; // Reset del flag di interrupt
-
-    buffWrite(&circBuffRx, U2RXREG);
-}
-
+// Function to parse a character
 int parse_byte(parser_state* ps, char byte) {
     switch (ps->state) {
         case STATE_DOLLAR:
@@ -217,7 +128,7 @@ int parse_byte(parser_state* ps, char byte) {
     return NO_MESSAGE;
 }
 
-// Extract integer value from a string
+// Function to extract integer value from a string
 int extract_integer(const char* str) {
     int i = 0, sign = 1, number = 0;
 
@@ -239,13 +150,14 @@ int extract_integer(const char* str) {
     return sign*number;
 }
 
+// Function to retrieve the next value
 int next_value(const char* msg, int i) {
     while (msg[i] != ',' && msg[i] != '\0') i++;
     if (msg[i] == ',') i++;
     return i;
 }
 
-// Recognize $PCTH,minth,maxth*
+// Function to parse "$PCTH,minth,maxth*"
 void parse_pcth(const char* msg, double* minth, double* maxth) {
     int i = 0, minCM, maxCM;
 
@@ -264,29 +176,29 @@ void buffInit(CircBuff* buff) {
     buff->writeIdx = 0;
 }
 
-// Function to write a char to the circular buffer
+// Function to write a character to the circular buffer
 void buffWrite(CircBuff *buff, char data) {
     // If writeIdx - readIdx == 1, then thorugh away the oldest character
-    if ((buff->readIdx % BUFF_SIZE) - (buff->writeIdx % BUFF_SIZE) <= 1 && buff->writeIdx < buff->readIdx)
-        buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
+    if ((buff->readIdx % SIZE) - (buff->writeIdx % SIZE) <= 1 && buff->writeIdx < buff->readIdx)
+        buff->readIdx = (buff->readIdx + 1) % SIZE;
 
     buff->buff[buff->writeIdx] = data;
-    buff->writeIdx = (buff->writeIdx + 1) % BUFF_SIZE;
+    buff->writeIdx = (buff->writeIdx + 1) % SIZE;
 }
 
 // Function to read a char from the circular buffer
 char buffRead(CircBuff *buff) {
     char data = buff->buff[buff->readIdx];
-    buff->readIdx = (buff->readIdx + 1) % BUFF_SIZE;
+    buff->readIdx = (buff->readIdx + 1) % SIZE;
     return data;
 }
 
-// Function to check if there are characters to flush
+// Function to check if there are characters to read
 int checkAvailableBytes(CircBuff* buff) {
     if (buff->readIdx <= buff->writeIdx)
         return buff->writeIdx - buff->readIdx;
     else
-        return BUFF_SIZE - buff->readIdx + buff->writeIdx;
+        return SIZE - buff->readIdx + buff->writeIdx;
 }
 
 void initPins() {
@@ -303,7 +215,7 @@ void initUART2() {
     const int baund = 9600;
     U2BRG = (FOSC / 2) / (16L * baund) - 1;
     U2MODEbits.UARTEN = 1;
-    U2STAbits.UTXEN = 1; // enable U2TX (must be after UARTEN)
+    U2STAbits.UTXEN = 1;
 }
 
 void remapUARTPins() {
@@ -311,7 +223,7 @@ void remapUARTPins() {
     RPINR19bits.U2RXR = 0x4B;
 }
 
-void initADC1() {    
+void initADC1() {
     // IR sensor analog configuration AN15
     TRISBbits.TRISB15 = 1;
     ANSELBbits.ANSB15 = 1;
@@ -389,7 +301,7 @@ void stopMotors() {
 }
 
 void blinkLights(const int ms) {
-    if (startCount == ms) {
+    if (blinkCount == ms) {
         LATAbits.LATA0 = !LATAbits.LATA0;
 
         if (!start) {
@@ -400,17 +312,19 @@ void blinkLights(const int ms) {
         if (blinkRightLight && start)
             LATFbits.LATF1 = !LATFbits.LATF1;
 
-        startCount = 0;
+        blinkCount = 0;
     }
-    startCount++;
+    blinkCount++;
 }
 
-double computeDist(double read_val) {
+// Compute distance value from sensor reading (in M)
+double computeDist(const double read_val) {
     double v = read_val * 3.3 / 1024.0;
     return 2.34 - 4.74*v + 4.06 * v*v - 1.60 * v*v*v + 0.24 * v*v*v*v;
 }
 
-double computeBattVolt(double read_val) {
+// Compute battery voltage value
+double computeBattVolt(const double read_val) {
     const double R1 = 200.0, R2 = 100.0;
     double v = read_val * 3.3 / 1024.0;
     return v * (R1 + R2) / R2;
@@ -478,11 +392,11 @@ double computeYaw(const double dist, const double minth, const double maxth) {
     return yaw_rate;
 }
 
-// Send to UART distance information
+// Load distance into the tx circular buffer
 void sendDistUART(double value) {
     char buff[12];
 
-    if (countTx % 100 == 13) {
+    if (txCount % 100 == 13) {
         value *= 100;
         sprintf(buff, "$MDIST,%d*", (int)value);
 
@@ -491,28 +405,27 @@ void sendDistUART(double value) {
     }
 }
 
-// Send to UART battery information
+// Load battery value into the tx circular buffer
 void sendBattUART(double value) {
     char buff[13];
 
-    if (countTx == 1000) {
+    if (txCount == 1000) {
         sprintf(buff, "$MBATT,%.2f*", value);
-        countTx = 0;
+        txCount = 0;
 
         for (int i = 0; i < strlen(buff); i++)
             buffWrite(&circBuffTx, buff[i]);
     }
 }
 
-// Send to UART duty cycle information
+// Load duty cycles into the tx circular buffer
 void sendDcsUART(double* values) {
     char buff[23];
 
-    // Compute duty cycles
     for (int i = 0; i < 4; i++)
         values[i] = values[i] * 100 / OC_MAX;
 
-    if (countTx % 100 == 43) {
+    if (txCount % 100 == 43) {
         sprintf(buff, "$MPWM,%d,%d,%d,%d*", (int)values[0], (int)values[1], (int)values[2], (int)values[3]);
 
         for (int i = 0; i < strlen(buff); i++)
@@ -520,7 +433,7 @@ void sendDcsUART(double* values) {
     }
 }
 
-// Command lights based on surge and yaw
+// Command lights based on surge and yaw values
 void checkLights(const double surge, const double yaw_rate) {
     if (surge > 0.5) {
         LATAbits.LATA7 = 1;
@@ -553,6 +466,36 @@ void turnOffLights() {
     LATAbits.LATA7 = 0;
 }
 
+// Button E8 (INT1) interrupt
+void __attribute__ (( __interrupt__ , __auto_psv__ )) _INT1Interrupt() {
+    IFS1bits.INT1IF = 0; // reset interrupt flag
+    IEC1bits.INT1IE = 0;
+
+    // start timer form 10ms
+    tmr_setup_period(TIMER2, 10);
+}
+
+// Timer T2 interrupt
+void __attribute__ (( __interrupt__ , __auto_psv__ )) _T2Interrupt() {
+    IFS0bits.T2IF = 0; // reset interrupt flag
+
+    T2CONbits.TON = 0; // stop T2
+    if (!PORTEbits.RE8) {
+        start = !start;
+        blinkCount = 0;
+        turnOffLights();
+    }
+
+    IEC1bits.INT1IE = 1;
+}
+
+// UART2 RX interrupt
+void __attribute__((__interrupt__, __auto_psv__)) _U2RXInterrupt() {
+    IFS1bits.U2RXIF = 0; // reset del flag di interrupt
+
+    buffWrite(&circBuffRx, U2RXREG);
+}
+
 int main() {
     ANSELA = ANSELB = ANSELC = ANSELD = ANSELE = ANSELG = 0x0000;
 
@@ -583,7 +526,7 @@ int main() {
 
     double minth = 0.2, maxth = 0.5;
     double dist, batt_val;
-    double ocrs[4] = { 0.0 };
+    double ocrs[4] = { 0.0 }; // OCxR of the motors
     double surge = 0.0, yaw_rate = 0.0;
     int ret;
 
@@ -633,7 +576,7 @@ int main() {
         blinkLights(1000);
         IEC1bits.INT1IE = 1;
 
-        countTx++;
+        txCount++;
 
         tmr_wait_period(TIMER1);
     };
